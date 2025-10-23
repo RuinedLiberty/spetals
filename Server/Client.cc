@@ -13,7 +13,7 @@
 #include <array>
 #include <iostream>
 
-constexpr std::array<uint32_t, RarityID::kNumRarities> RARITY_TO_XP = { 2, 10, 50, 200, 1000, 5000, 0 };
+constexpr std::array<uint32_t, RarityID::kNumRarities> RARITY_TO_XP = { 2, 10, 50, 200, 1000, 0 };
 
 Client::Client() : game(nullptr) {}
 

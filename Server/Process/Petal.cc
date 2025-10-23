@@ -36,14 +36,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 petal.acceleration.unit_normal(petal.heading_angle).set_magnitude(2.0 * PLAYER_ACCELERATION);
                 break;
             }
-            case PetalID::kMoon: {
-                Vector delta(player.get_x() - petal.get_x(), player.get_y() - petal.get_y());
-                float magnitude = 20000 * PLAYER_ACCELERATION / (delta.x * delta.x + delta.y * delta.y);
-                if (magnitude > PLAYER_ACCELERATION) magnitude = PLAYER_ACCELERATION;
-                delta.set_magnitude(magnitude);
-                petal.acceleration.set(delta.x, delta.y);
-                break;
-            }
+            
             default:
                 petal.acceleration.set(0,0);
                 break;
@@ -122,15 +115,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 }
             }
             break;
-        case PetalID::kMoon: {
-            if (BitMath::at(player.input, InputFlags::kAttacking)) {
-                Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());
-                petal.friction = 0;
-                petal.acceleration.unit_normal(delta.angle() + M_PI / 3).set_magnitude(3 * PLAYER_ACCELERATION);
-                entity_set_despawn_tick(petal, 10 * TPS);
-            }
-            break;
-        }
+        
         default:
             break;
     }

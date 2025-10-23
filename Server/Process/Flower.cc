@@ -51,12 +51,8 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
         buffs.extra_health += attrs.extra_health;
         player.damage_reflection = std::fmax(player.damage_reflection, attrs.damage_reflection);
         player.poison_armor = std::fmax(player.poison_armor, attrs.poison_armor / TPS);
-        if (slot_petal_id == PetalID::kPoisonCactus)
+                if (slot_petal_id == PetalID::kPoisonCactus)
             buffs.is_poisonous = 1;
-        if (slot_petal_id == PetalID::kGoldenLeaf) {
-            buffs.damage_factor *= 1.2;
-            buffs.reload_factor *= 1.2;
-        }
     }
     return buffs;
 }

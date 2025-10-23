@@ -108,12 +108,7 @@ void draw_static_flower(Renderer &ctx, FlowerRenderAttributes attributes) {
         else
             draw_static_petal(PetalID::kThirdEye, ctx);
     }
-    if (BitMath::at(attributes.equip_flags, EquipmentFlags::kObserver))
-    {
-        RenderContext g(&ctx);
-        ctx.translate(0, -35);
-        draw_static_petal(PetalID::kObserver, ctx);
-    } else if (BitMath::at(attributes.equip_flags, EquipmentFlags::kAntennae))
+        if (BitMath::at(attributes.equip_flags, EquipmentFlags::kAntennae))
     {
         RenderContext g(&ctx);
         ctx.translate(0, -35);

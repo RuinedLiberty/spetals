@@ -55,15 +55,9 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.stroke();
             break;
         }
-        case PetalID::kGoldenLeaf:
-        case PetalID::kLeaf: 
-            if (id == PetalID::kLeaf) {
-                ctx.set_fill(0xff39b54a);
-                ctx.set_stroke(0xff2e933c);
-            } else {
-                ctx.set_fill(0xffebeb34);
-                ctx.set_stroke(0xffbebe2a);
-            }
+                case PetalID::kLeaf: 
+            ctx.set_fill(0xff39b54a);
+            ctx.set_stroke(0xff2e933c);
             ctx.set_line_width(3);
             ctx.round_line_cap();
             ctx.round_line_join();
@@ -249,29 +243,7 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.stroke();
             break;
         }
-        case PetalID::kObserver: {
-            ctx.round_line_cap();
-            ctx.round_line_join();
-            ctx.set_stroke(0xff333333);
-            ctx.set_line_width(3);
-            ctx.begin_path();
-            ctx.move_to(5, 12.5);
-            ctx.qcurve_to(10, -2.5, 15, -12.5);
-            ctx.qcurve_to(5, -2.5, 5, 12.5);
-            ctx.move_to(-5, 12.5);
-            ctx.qcurve_to(-10, -2.5, -15, -12.5);
-            ctx.qcurve_to(-5, -2.5, -5, 12.5);
-            ctx.fill();
-            ctx.stroke();
-            ctx.set_fill(0xffd01c1d);
-            ctx.begin_path();
-            ctx.arc(15, -12.5, 2.5);
-            ctx.close_path();
-            ctx.arc(-15, -12.5, 2.5);
-            ctx.close_path();
-            ctx.fill();
-            break;
-        }
+        
         case PetalID::kBlueIris:
             ctx.set_fill(0xff39e9f1);
             ctx.set_stroke(0xff2dbac0);
@@ -429,32 +401,7 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.fill();
             ctx.stroke();
             break;
-        case PetalID::kMoon: {
-            ctx.set_fill(0xff878787);
-            ctx.set_stroke(0xff6d6d6d);
-            ctx.set_line_width(5);
-            ctx.begin_path();
-            ctx.arc(0,0,r);
-            ctx.stroke();
-            ctx.fill();
-            ctx.clip();
-            SeedGenerator gen(id * 274633 + 284562);
-            uint32_t ct = 10;
-            ctx.set_fill(0xff999999);
-            ctx.set_stroke(0xff7c7c7c);
-            ctx.set_line_width(3);
-            ctx.begin_path();
-            for (uint32_t i = 0; i < ct; ++i) {
-                float _x = gen.binext() * (r + 10);
-                float _y = gen.binext() * (r + 10);
-                float _r = gen.binext() * 10 + 10;
-                ctx.move_to(_x,_y);
-                ctx.arc(_x,_y,_r);
-            }
-            ctx.stroke();
-            ctx.fill(1);
-            break;
-        }
+        
         case PetalID::kLotus:
             ctx.scale(r / 10);
             ctx.set_fill(0xffce76db);
