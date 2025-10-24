@@ -245,6 +245,7 @@ struct MobData {
     RangeValue radius;
     uint32_t xp;
     StaticArray<PetalID::T, MAX_DROPS_PER_MOB> drops;
+    StaticArray<float, MAX_DROPS_PER_MOB> drop_rates; // percent values, e.g., 0.05 means 0.05%
     struct MobAttributes attributes;
 };
 

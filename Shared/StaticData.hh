@@ -131,8 +131,6 @@ std::array const ANTHOLE_SPAWNS = std::to_array<StaticArray<MobID::T, 3>>({
     {MobID::kSoldierAnt,MobID::kSoldierAnt,MobID::kSoldierAnt}
 });
 
-extern std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> const MOB_DROP_CHANCES;
-
 extern uint32_t score_to_pass_level(uint32_t);
 extern uint32_t score_to_level(uint32_t);
 extern uint32_t level_to_score(uint32_t);
