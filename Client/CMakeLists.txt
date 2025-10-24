@@ -10,6 +10,54 @@ set(SRCS
     Assets/Mob.cc
     Assets/Petal.cc
     Assets/Web.cc
+    # Per-petal drawings
+    Assets/Petals/AntEgg.cc
+    Assets/Petals/Antennae.cc
+    Assets/Petals/Azalea.cc
+    Assets/Petals/Basic.cc
+    Assets/Petals/BeetleEgg.cc
+    Assets/Petals/Bone.cc
+    Assets/Petals/Bubble.cc
+    Assets/Petals/Cactus.cc
+    Assets/Petals/Corn.cc
+    Assets/Petals/Cutter.cc
+    Assets/Petals/Dahlia.cc
+    Assets/Petals/Dandelion.cc
+    Assets/Petals/Faster.cc
+    Assets/Petals/Heaviest.cc
+    Assets/Petals/Heavy.cc
+    Assets/Petals/Iris.cc
+    Assets/Petals/Leaf.cc
+    Assets/Petals/Light.cc
+    Assets/Petals/Lotus.cc
+    Assets/Petals/Missile.cc
+    Assets/Petals/None.cc
+    Assets/Petals/Peas.cc
+    Assets/Petals/Pincer.cc
+    Assets/Petals/PoisonCactus.cc
+    Assets/Petals/PoisonPeas.cc
+    Assets/Petals/Pollen.cc
+    Assets/Petals/Rice.cc
+    Assets/Petals/Rock.cc
+    Assets/Petals/Rose.cc
+    Assets/Petals/Salt.cc
+    Assets/Petals/Sand.cc
+    Assets/Petals/Square.cc
+    Assets/Petals/Stick.cc
+    Assets/Petals/Stinger.cc
+    Assets/Petals/ThirdEye.cc
+    Assets/Petals/Tricac.cc
+    Assets/Petals/Tringer.cc
+    Assets/Petals/Triplet.cc
+    Assets/Petals/Triweb.cc
+    Assets/Petals/Twin.cc
+    Assets/Petals/UniqueBasic.cc
+    Assets/Petals/Web.cc
+    Assets/Petals/Wing.cc
+    Assets/Petals/Yggdrasil.cc
+    Assets/Petals/YinYang.cc
+    Assets/Petals/Yucca.cc
+
     Render/RenderDrop.cc
     Render/RenderFlower.cc
     Render/RenderHealth.cc

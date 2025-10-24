@@ -330,22 +330,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             .spawns = MobID::kSoldierAnt
         }
     },
-    {
-        .name = "Iris",
-        .description = "Deals its effects quicker than traditional irises",
-        .health = 10.0,
-        .damage = 5.0,
-        .radius = 7.0,
-        .reload = 5.0,
-        .count = 1,
-        .rarity = RarityID::kEpic,
-        .attributes = { 
-            .poison_damage = {
-                .damage = 15.0,
-                .time = 4.0
-            }
-        }
-    },
+    
     {
         .name = "Pollen",
         .description = "Asthmatics beware",

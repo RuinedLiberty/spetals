@@ -49,7 +49,6 @@ namespace PetalID {
         kDahlia,
         kTriplet,
         kAntEgg,
-        kBlueIris,
         kPollen,
         kPoisonPeas,
         kBeetleEgg,
