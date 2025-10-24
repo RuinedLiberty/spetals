@@ -657,6 +657,65 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .attributes = {
             .icon_angle = 0.5
         }
+    },
+    {
+        .name = "Leaf",
+        .description = "A very special leaf, seems to allow you to use your other petals even more.",
+        .health = 10.0,
+        .damage = 8.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+                .attributes = {
+            .reload_reduction = 0.21f,
+            .icon_angle = -1
+        }
+    },
+    {
+        .name = "Peas",
+        .description = "4 in 1 deal, now with a secret ingredient: poison",
+        .health = 20.0,
+        .damage = 10.0,
+        .radius = 12.0,
+        .reload = 1.4,
+        .count = 4,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .clump_radius = 10,
+            .secondary_reload = 0.1,
+            .poison_damage = { .damage = 35.0, .time = 1.0 },
+            .defend_only = 1,
+            .split_projectile = 1,
+            .icon_angle = 0.2
+        }
+    },
+    {
+        .name = "Soil",
+        .description = "The bigger, the better!",
+        .health = 10.0,
+        .damage = 10.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .extra_flower_radius = 10.0f,
+            .extra_health = 35.0f
+        }
+    },
+    {
+        .name = "Faster",
+        .description = "So fast I can barely see it",
+        .health = 5.0,
+        .damage = 8.0,
+        .radius = 7.0,
+        .reload = 0.5,
+        .count = 3,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .extra_rotation_speed = 1.7f
+        }
     }, 
 }};
 
@@ -985,7 +1044,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             PetalID::kLeaf,
             PetalID::kPeas,
             PetalID::kTriplet,
-            //PetalID::kGoldenLeaf
+            PetalID::kGoldenLeaf
         },
         .drop_rates = {
             /* PetalID::kLight */ 9.00f,
@@ -993,7 +1052,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             /* PetalID::kLeaf */ 5.00f,
             /* PetalID::kPeas */ 3.00f,
             /* PetalID::kTriplet */ 0.01f,
-            ///* PetalID::kGoldenLeaf */ 0.01f
+            /* PetalID::kGoldenLeaf */ 0.01f
         },
         .attributes = {
             .segments = 10
@@ -1011,11 +1070,13 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             PetalID::kIris,
             PetalID::kPoisonPeas,
             PetalID::kTriplet,
+            PetalID::kLPeas,
         },
         .drop_rates = {
             /* PetalID::kIris */ 82.00f,
             /* PetalID::kPoisonPeas */ 2.00f,
             /* PetalID::kTriplet */ 0.03f,
+            /* PetalID::kLPeas */ 0.01f,
         },
         .attributes = { 
             .segments = 10, 
@@ -1033,15 +1094,17 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .damage = 10.0,
         .radius = {35.0},
         .xp = 4,
-        .drops = {
+                .drops = {
             PetalID::kSand,
             PetalID::kFaster,
             PetalID::kSalt,
+            PetalID::kTriFaster,
         },
-        .drop_rates = {
+                .drop_rates = {
             /* PetalID::kSand */ 12.00f,
             /* PetalID::kFaster */ 4.00f,
             /* PetalID::kSalt */ 8.00f,
+            /* PetalID::kTriFaster */ 0.03f,
         },
         .attributes = {
             .segments = 6
@@ -1129,15 +1192,17 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .damage = 15.0,
         .radius = {45.0},
         .xp = 25,
-        .drops = {
+                .drops = {
             PetalID::kIris,
             PetalID::kWing,
             PetalID::kAntEgg,
+            PetalID::kSoil,
         },
-        .drop_rates = {
+                .drop_rates = {
             /* PetalID::kIris */ 100.00f,
             /* PetalID::kWing */ 31.00f,
             /* PetalID::kAntEgg */ 6.00f,
+            /* PetalID::kSoil */ 5.00f,
         },
         .attributes = {
             .stationary = 1 

@@ -55,6 +55,10 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
         case PetalID::kBone: Petals::Bone(ctx, r); break;
         case PetalID::kYucca: Petals::Yucca(ctx, r); break;
         case PetalID::kCorn: Petals::Corn(ctx, r); break;
+        case PetalID::kGoldenLeaf: Petals::GoldenLeaf(ctx, r); break;
+        case PetalID::kLPeas: Petals::LPeas(ctx, r); break;
+        case PetalID::kSoil: Petals::Soil(ctx, r); break;
+        case PetalID::kTriFaster: Petals::TriFaster(ctx, r); break;
         default:
             assert(id < PetalID::kNumPetals);
             assert(!"didn't cover petal render");

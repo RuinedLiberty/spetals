@@ -51,4 +51,9 @@ namespace Petals {
     void Bone(Renderer &ctx, float r);
     void Yucca(Renderer &ctx, float r);
     void Corn(Renderer &ctx, float r);
+    // New petals
+    void GoldenLeaf(Renderer &ctx, float r);
+    void LPeas(Renderer &ctx, float r);
+    void Soil(Renderer &ctx, float r);
+    void TriFaster(Renderer &ctx, float r);
 }

@@ -91,6 +91,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             break;
         case PetalID::kPeas:
         case PetalID::kPoisonPeas:
+        case PetalID::kLPeas:
             if (BitMath::at(player.input, InputFlags::kAttacking)) {
                 float spray_angle = frand() * 2 * M_PI;
                 petal.set_split_projectile(0);

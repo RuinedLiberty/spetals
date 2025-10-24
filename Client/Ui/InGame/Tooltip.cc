@@ -17,8 +17,9 @@ static float get_reload_factor() {
     if (!Game::alive()) return 1;
     float factor = 1;
     Entity &player = Game::simulation.get_ent(Game::player_id);
-    for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
-        factor *= PETAL_DATA[player.get_loadout_ids(i)].attributes.extra_reload_factor;
+            for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
+        auto const &attrs = PETAL_DATA[player.get_loadout_ids(i)].attributes;
+        factor *= (1.0f - attrs.reload_reduction);
     }
     return factor;
 }
@@ -135,10 +136,10 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::StaticText(12, "+"+format_pct(100 * (attrs.extra_damage_factor - 1)))
         }, 0, 5, { .h_justify = Style::Left }));
     }
-    if (attrs.extra_reload_factor > 1) {
+        if (attrs.reload_reduction > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Extra Reload:", { .fill = 0xff7777ff }),
-            new Ui::StaticText(12, "+"+format_pct(100 * (attrs.extra_reload_factor - 1)))
+            new Ui::StaticText(12, "Reload Reduction:", { .fill = 0xff7777ff }),
+            new Ui::StaticText(12, format_pct(attrs.reload_reduction * 100))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     return new Ui::VContainer(stats, 0, 2, { .h_justify = Style::Left });

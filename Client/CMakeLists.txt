@@ -57,6 +57,10 @@ set(SRCS
     Assets/Petals/Yggdrasil.cc
     Assets/Petals/YinYang.cc
     Assets/Petals/Yucca.cc
+    Assets/Petals/GoldenLeaf.cc
+    Assets/Petals/LPeas.cc
+    Assets/Petals/Soil.cc
+    Assets/Petals/TriFaster.cc
 
     Render/RenderDrop.cc
     Render/RenderFlower.cc

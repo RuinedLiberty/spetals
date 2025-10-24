@@ -39,7 +39,7 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
         buffs.extra_range = std::fmax(attrs.extra_range, buffs.extra_range);
         buffs.extra_damage = std::fmax(buffs.extra_damage, attrs.extra_body_damage);
         buffs.damage_factor *= attrs.extra_damage_factor;
-        buffs.reload_factor *= attrs.extra_reload_factor;
+        buffs.reload_factor *= (1.0f - attrs.reload_reduction);
         if (slot_petal_id == PetalID::kYinYang)
             ++buffs.yinyang_count;
         if (!player.loadout[i].already_spawned) continue;
@@ -86,6 +86,15 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         player.damage = BASE_BODY_DAMAGE + buffs.extra_damage;
     }
     player.health = health_ratio * player.max_health;
+    float radius_bonus = 0.0f;
+    for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
+        PetalID::T pid = player.get_loadout_ids(i);
+        radius_bonus += PETAL_DATA[pid].attributes.extra_flower_radius;
+    }
+    float target_radius = BASE_FLOWER_RADIUS + radius_bonus;
+    float curr_radius = player.get_radius();
+    float new_radius = curr_radius + (target_radius - curr_radius) * 0.2f;
+    player.set_radius(new_radius);
     if (buffs.heal > 0)
         inflict_heal(sim, player, buffs.heal);
     if (buffs.is_poisonous)
@@ -95,7 +104,6 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
     
     float rot_pos = 0;
     uint32_t rotation_count = _get_petal_rotation_count(sim, player);
-    //maybe use delta mode for face flags?
     player.set_face_flags(0);
 
     if (sim->ent_alive(player.get_parent())) {
@@ -106,8 +114,6 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
     DEBUG_ONLY(assert(player.get_loadout_count() <= MAX_SLOT_COUNT);)
     for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
         LoadoutSlot &slot = player.loadout[i];
-        //player.set_loadout_ids(i, slot.id);
-        //other way around. loadout_ids should dictate loadout
         if (slot.get_petal_id() != player.get_loadout_ids(i) || player.get_overlevel_timer() >= PETAL_DISABLE_DELAY * TPS)
             slot.update_id(sim, player.get_loadout_ids(i));
         PetalID::T slot_petal_id = slot.get_petal_id();

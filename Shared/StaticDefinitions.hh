@@ -72,6 +72,10 @@ namespace PetalID {
         kBone,
         kYucca,
         kCorn,
+        kGoldenLeaf,
+        kLPeas,
+        kSoil,
+        kTriFaster,
         kNumPetals
     };
 };
@@ -205,7 +209,8 @@ struct PetalAttributes {
     float extra_health = 0;
     float damage_reflection = 0;
     float extra_damage_factor = 1;
-    float extra_reload_factor = 1;
+    float reload_reduction = 0;
+    float extra_flower_radius = 0;
     struct PoisonDamage poison_damage;
     uint8_t defend_only = 0;
     float icon_angle = 0;
