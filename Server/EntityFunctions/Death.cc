@@ -69,11 +69,13 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         if (BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone))
             Map::remove_mob(sim, ent.zone);
         if (!natural_despawn && !(BitMath::at(ent.flags, EntityFlags::kNoDrops))) {
-            struct MobData const &mob_data = MOB_DATA[ent.get_mob_id()];
+                        struct MobData const &mob_data = MOB_DATA[ent.get_mob_id()];
             std::vector<PetalID::T> success_drops = {};
-            StaticArray<float, MAX_DROPS_PER_MOB> const &drop_chances = MOB_DROP_CHANCES[ent.get_mob_id()];
-            for (uint32_t i = 0; i < mob_data.drops.size(); ++i) 
-                if (frand() < drop_chances[i]) success_drops.push_back(mob_data.drops[i]);
+            // drop_rates are stored as percentages (e.g., 0.05 means 0.05%)
+            for (uint32_t i = 0; i < mob_data.drops.size(); ++i) {
+                float chance_prob = mob_data.drop_rates[i] / 100.0f;
+                if (frand() < chance_prob) success_drops.push_back(mob_data.drops[i]);
+            }
             _alloc_drops(sim, success_drops, ent.get_x(), ent.get_y());
         }
         if (ent.get_mob_id() == MobID::kAntHole && ent.get_team() == NULL_ENTITY && frand() < DIGGER_SPAWN_CHANCE) { 

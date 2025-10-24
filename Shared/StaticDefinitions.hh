@@ -61,12 +61,10 @@ namespace PetalID {
         kTricac,
         kHeaviest,
         kThirdEye,
-        kObserver,
         kPoisonCactus,
         kSalt,
         kUniqueBasic,
         kSquare,
-        kMoon,
         kLotus,
         kCutter,
         kYinYang,
@@ -75,7 +73,6 @@ namespace PetalID {
         kBone,
         kYucca,
         kCorn,
-        kGoldenLeaf,
         kNumPetals
     };
 };
@@ -118,7 +115,6 @@ namespace RarityID {
         kRare,
         kEpic,
         kLegendary,
-        kMythic,
         kUnique,
         kNumRarities
     };
@@ -171,7 +167,6 @@ namespace EquipmentFlags {
     enum {
         kThirdEye,
         kAntennae,
-        kObserver,
         kCutter,
         kNone
     };
@@ -250,6 +245,7 @@ struct MobData {
     RangeValue radius;
     uint32_t xp;
     StaticArray<PetalID::T, MAX_DROPS_PER_MOB> drops;
+    StaticArray<float, MAX_DROPS_PER_MOB> drop_rates; // percent values, e.g., 0.05 means 0.05%
     struct MobAttributes attributes;
 };
 

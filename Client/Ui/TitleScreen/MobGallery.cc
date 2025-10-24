@@ -38,21 +38,20 @@ void GalleryMob::on_render(Renderer &ctx) {
 
 static Element *make_mob_drops(MobID::T id) {
     Element *elt = new Ui::HContainer({}, 0, 6, { .h_justify = Style::Left });
-    struct MobData const &data = MOB_DATA[id];
-    StaticArray<float, MAX_DROPS_PER_MOB> const &drop_chances = MOB_DROP_CHANCES[id];
+        struct MobData const &data = MOB_DATA[id];
     std::vector<uint8_t> order;
     for (uint32_t i = 0; i < data.drops.size(); ++i)
         order.push_back(i);
     
     std::sort(order.begin(), order.end(), [&](uint8_t a, uint8_t b) {
-        return drop_chances[a] > drop_chances[b];
+        return data.drop_rates[a] > data.drop_rates[b];
     });
 
     for (uint32_t i = 0; i < data.drops.size(); ++i) {
         uint32_t j = order[i];
         elt->add_child(new Ui::VContainer({
             new GalleryPetal(data.drops[j], 45),
-            new StaticText(12, format_pct(drop_chances[j] * 100))
+            new StaticText(12, format_pct(data.drop_rates[j]))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     return elt;
