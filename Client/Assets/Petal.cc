@@ -244,15 +244,8 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             break;
         }
         
-        case PetalID::kBlueIris:
-            ctx.set_fill(0xff39e9f1);
-            ctx.set_stroke(0xff2dbac0);
-            ctx.set_line_width(3);
-            ctx.begin_path();
-            ctx.arc(0,0,r);
-            ctx.fill();
-            ctx.stroke();
-            break;
+                
+
         case PetalID::kCactus:
         case PetalID::kTricac:
             ctx.set_fill(0xff38c75f);
