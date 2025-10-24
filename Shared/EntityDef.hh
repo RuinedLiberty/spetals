@@ -130,7 +130,10 @@ SINGLE(Name, nametag_visible, uint8_t)
     \
     SINGLE(zone, uint8_t, =0) \
     SINGLE(deletion_tick, uint8_t, =0) \
-    SINGLE(deleted_petals, circ_arr_t, ={})
+    SINGLE(deleted_petals, circ_arr_t, ={}) \
+    SINGLE(projectile_decay_active, uint8_t, =0) \
+    SINGLE(projectile_init_speed, float, =0) \
+    SINGLE(projectile_target_ratio, float, =0)
 #else
 #define PER_EXTRA_FIELD \
     SINGLE(last_damaged_time, double, =0) \
