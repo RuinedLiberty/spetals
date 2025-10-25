@@ -45,11 +45,17 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
     uint8_t const *data = reinterpret_cast<uint8_t const *>(message.data());
     Reader reader(data);
     Validator validator(data, data + message.size());
+#ifndef WASM_SERVER
+    PerSocketData *psd = ws->getUserData();
+    Client *client = (psd ? psd->client : nullptr);
+#else
     Client *client = ws->getUserData();
+#endif
     if (client == nullptr) {
         ws->end(CloseReason::kServer, "Server Error");
         return;
     }
+
     if (!client->verified) {
         if (client->check_invalid(validator.validate_uint8() && validator.validate_uint64())) return;
         if (reader.read<uint8_t>() != Serverbound::kVerify) {
@@ -152,10 +158,16 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
 
 void Client::on_disconnect(WebSocket *ws, int code, std::string_view message) {
     std::printf("disconnect: [%d]\n", code);
+#ifndef WASM_SERVER
+    PerSocketData *psd = ws->getUserData();
+    Client *client = (psd ? psd->client : nullptr);
+#else
     Client *client = ws->getUserData();
+#endif
     if (client == nullptr) return;
     client->remove();
 }
+
 
 bool Client::check_invalid(bool valid) {
     if (valid) return false;

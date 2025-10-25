@@ -103,7 +103,7 @@ WebSocketServer::WebSocketServer() {
         if (!fs.existsSync(DB_PATH)) {
             fs.writeFileSync(DB_PATH, "");
         }
-        var db = new sqlite3.Database(DB_PATH);
+                var db = new sqlite3.Database(DB_PATH);
         db.serialize(function() {
             db.run('CREATE TABLE IF NOT EXISTS users (\
                 discord_id TEXT PRIMARY KEY,\
@@ -111,6 +111,18 @@ WebSocketServer::WebSocketServer() {
                 created_at INTEGER,\
                 account_xp INTEGER DEFAULT 0,\
                 account_level INTEGER DEFAULT 1\
+            )');
+            db.run('CREATE TABLE IF NOT EXISTS accounts (\
+                id TEXT PRIMARY KEY,\
+                created_at INTEGER NOT NULL,\
+                updated_at INTEGER NOT NULL,\
+                banned INTEGER NOT NULL DEFAULT 0,\
+                ban_reason TEXT\
+            )');
+            db.run('CREATE TABLE IF NOT EXISTS discord_links (\
+                account_id TEXT NOT NULL,\
+                discord_user_id TEXT NOT NULL UNIQUE,\
+                created_at INTEGER NOT NULL\
             )');
         });
 
@@ -175,7 +187,7 @@ WebSocketServer::WebSocketServer() {
                         if (!tokenResp.access_token) { res.writeHead(400).end("Auth failed"); return; }
                         var user = await fetchUser(tokenResp.access_token);
                         if (!user || !user.id) { res.writeHead(400).end("User fetch failed"); return; }
-                        // upsert user into DB
+                                                // upsert user into DB
                         const now = Date.now();
                         await new Promise(function(resolve, reject) {
                             db.run(
@@ -184,6 +196,25 @@ WebSocketServer::WebSocketServer() {
                                 function(err){ if (err) reject(err); else resolve(); }
                             );
                         });
+                        // ensure game account exists & linked
+                        if (!Module.accByDiscord) Module.accByDiscord = new Map();
+                        let accountId = await new Promise(function(resolve, reject){
+                            db.get('SELECT account_id FROM discord_links WHERE discord_user_id=?', [user.id], function(err, row){
+                                if (err) reject(err); else resolve(row ? row.account_id : null);
+                            });
+                        });
+                        if (!accountId) {
+                            // Prefer crypto.randomUUID if available
+                            const gen = (crypto.randomUUID ? crypto.randomUUID() : (function(){ const r = crypto.randomBytes(16).toString('hex'); return r.slice(0,8)+'-'+r.slice(8,12)+'-'+r.slice(12,16)+'-'+r.slice(16,20)+'-'+r.slice(20); })());
+                            accountId = gen;
+                            await new Promise(function(resolve, reject){
+                                db.run('INSERT INTO accounts (id, created_at, updated_at, banned) VALUES (?, ?, ?, 0)', [accountId, Math.floor(now/1000), Math.floor(now/1000)], function(err){ if (err) reject(err); else resolve(); });
+                            });
+                            await new Promise(function(resolve, reject){
+                                db.run('INSERT INTO discord_links (account_id, discord_user_id, created_at) VALUES (?, ?, ?)', [accountId, user.id, Math.floor(now/1000)], function(err){ if (err) reject(err); else resolve(); });
+                            });
+                        }
+                        Module.accByDiscord.set(user.id, accountId);
                         // create session
                         const token = makeToken();
                         Module.sessions.set(token, { userId: user.id, username: user.username, createdAt: now });
@@ -256,7 +287,7 @@ WebSocketServer::WebSocketServer() {
         const wss = new WSS.Server({ "server": server });
 
         let curr_id = 0;
-        wss.on("connection", function(ws, req) {
+                    wss.on("connection", function(ws, req) {
             const ws_id = curr_id;
             Module.ws_connections[ws_id] = ws;
             curr_id = (curr_id + 1) | 0;
@@ -277,7 +308,27 @@ WebSocketServer::WebSocketServer() {
             Module.userActiveWs.set(sess.userId, ws_id);
             Module.sessionByWs.set(ws_id, sess.userId);
 
-            _on_connect(ws_id);
+            // Log account id and discord display
+            const proceed = (accountId) => {
+                const discordDisplay = (sess.username || sess.userId || 'unknown');
+                console.log('Client connected: account_id=' + (accountId || 'unknown') + ', discord=' + discordDisplay);
+                _on_connect(ws_id);
+            };
+            let accId = (Module.accByDiscord && Module.accByDiscord.get(sess.userId));
+            if (!accId) {
+                db.get('SELECT account_id FROM discord_links WHERE discord_user_id=?', [sess.userId], function(err, row){
+                    if (row && row.account_id) {
+                        if (!Module.accByDiscord) Module.accByDiscord = new Map();
+                        Module.accByDiscord.set(sess.userId, row.account_id);
+                        proceed(row.account_id);
+                    } else {
+                        proceed(null);
+                    }
+                });
+            } else {
+                proceed(accId);
+            }
+
 
             ws.on("message", function(message) {
                 let data = new Uint8Array(message);

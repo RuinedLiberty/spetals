@@ -1,0 +1,22 @@
+#pragma once
+
+#include <string>
+
+namespace AuthDB {
+    // Initialize SQLite database and ensure schema exists
+    // db_path: path to sqlite file (default data.db when empty)
+    bool init(const std::string &db_path = "");
+
+    // Create or fetch account for discord user id. Returns account_id (uuid) in out param.
+    bool upsert_account_for_discord(const std::string &discord_user_id, std::string &account_id_out);
+
+    // Create a session for account_id. ttl_seconds for expiry. Returns sid (opaque hex string)
+    bool create_session(const std::string &account_id, int ttl_seconds, std::string &sid_out);
+
+    // Validate a session token and resolve account uuid
+    // Returns true if valid (and not banned), filling account_id_out with UUID (36-chars)
+    bool validate_session_and_get_account(const std::string &sid, std::string &account_id_out);
+
+    // Fetch discord username by account id (if stored). Returns true if found.
+    bool get_discord_username(const std::string &account_id, std::string &username_out);
+}

@@ -1,0 +1,8 @@
+{
+  "DISCORD_CLIENT_ID": "1431349079459364954",
+  "DISCORD_CLIENT_SECRET": "7rKcr9JJxN0OhVnSzDfSRV2k5kxcp31M",
+  "SITE_BASE_URL": "https://spetals.io",
+  "DB_PATH": "data.db",
+  "COOKIE_TTL_MS": 28800000,
+  "COOKIE_NAME": "sid"
+}
