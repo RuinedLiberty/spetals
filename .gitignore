@@ -5,3 +5,11 @@ node_modules/
 .vscode/
 gardn-client.js
 gardn-client.wasm
+data.db
+data.db-wal
+data.db-shm
+data.db-journal
+data.db
+data.db-wal
+data.db-shm
+data.db-journal
