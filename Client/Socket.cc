@@ -46,36 +46,24 @@ Socket::Socket() {}
 void Socket::connect(std::string const url) {
     std::cout << "Connecting to " << url << '\n';
     EM_ASM({
-        let configured = UTF8ToString($1);
-
-        function resolveWsUrl() {
-            try {
-                if (configured && configured.length) return configured;
-                // Build ws(s) URL from the current page location
-                const isHttps = location.protocol === 'https:';
-                const proto = isHttps ? 'wss:' : 'ws:';
-                const host = location.host; // includes port if any
-                return proto + '//' + host + '/ws/';
-            } catch (e) {
-                return configured || 'ws://localhost:' + ($2|0) + '/ws/';
-            }
-        }
+        let string = UTF8ToString($1);
 
         function connect() {
             // Avoid duplicate connects
             if (Module.socket && (Module.socket.readyState === 0 || Module.socket.readyState === 1)) return;
-            const url = resolveWsUrl();
-            try { console.log('Connecting to', url); } catch(e) {}
-            let socket = Module.socket = new WebSocket(url);
+            let socket = Module.socket = new WebSocket(string);
             socket.binaryType = "arraybuffer";
-            socket.onopen = function() {
+                        socket.onopen = function() {
                 try { update_logged_in_as(); } catch(e) {}
                 _on_message(0, 0, 0);
             };
-            socket.onclose = function(a) {
+                        socket.onclose = function(a) {
                 _on_message(2, a.code, stringToNewUTF8(a.reason));
-                // If we were navigating for auth (back from Discord), refresh login state
-                try { if (a.code === 1005) { update_logged_in_as(); } } catch(e) {}
+                                                                // If we were navigating for auth (back from Discord), refresh login state
+                                try { if (a.code === 1005) { update_logged_in_as(); } } catch(e) {}
+
+
+
                 // Only retry if this tab is active
                 if (Module.shouldAttemptConnection && Module.shouldAttemptConnection()) {
                     Module.scheduleConnect ? Module.scheduleConnect(1000) : setTimeout(connect, 1000);
@@ -90,7 +78,7 @@ void Socket::connect(std::string const url) {
         if (!Module._socketInit) {
             Module._socketInit = true;
             Module.socketReconnectTimer = null;
-            Module.shouldAttemptConnection = function() {
+                                    Module.shouldAttemptConnection = function() {
                 try {
                     // Active iff tab is visible and focused
                     return document.visibilityState === 'visible' && document.hasFocus();
@@ -106,21 +94,23 @@ void Socket::connect(std::string const url) {
                 if (!Module.shouldAttemptConnection()) return;
                 Module.socketReconnectTimer = setTimeout(connect, delay || 0);
             };
-            // React to visibility/focus changes
+                        // React to visibility/focus changes
             document.addEventListener('visibilitychange', function() {
                 // On becoming visible, refresh login state first
                 if (document.visibilityState === 'visible') { try { update_logged_in_as(); } catch(e) {} }
-                if (Module.shouldAttemptConnection()) {
+
+                                if (Module.shouldAttemptConnection()) {
                     Module.scheduleConnect(0);
                 } else {
                     // Hidden: stop reconnect attempts; keep existing connection (server may close if a new tab connects)
                     Module.clearReconnect();
                 }
+
             });
             window.addEventListener('focus', function() {
                 if (Module.shouldAttemptConnection()) Module.scheduleConnect(0);
             });
-            window.addEventListener('blur', function() {
+                                    window.addEventListener('blur', function() {
                 // No action on blur. We rely on visibility change to close.
             });
         }
@@ -128,7 +118,7 @@ void Socket::connect(std::string const url) {
         if (Module.shouldAttemptConnection && Module.shouldAttemptConnection()) {
             Module.scheduleConnect ? Module.scheduleConnect(1000) : setTimeout(connect, 1000);
         }
-    }, INCOMING_PACKET, url.c_str(), SERVER_PORT);
+    }, INCOMING_PACKET, url.c_str());
 }
 
 
