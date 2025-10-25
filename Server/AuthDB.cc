@@ -5,6 +5,7 @@
 #include <cstring>
 #include <ctime>
 #include <iostream>
+#include <cstdlib>
 
 namespace {
     sqlite3 *g_db = nullptr;
@@ -15,7 +16,12 @@ namespace AuthDB {
 
 bool init(const std::string &db_path) {
     if (g_db) return true;
-    g_db_path = db_path.empty() ? std::string("data.db") : db_path;
+    if (!db_path.empty()) {
+        g_db_path = db_path;
+    } else {
+        const char *envp = std::getenv("SPETALS_DB_PATH");
+        g_db_path = envp && *envp ? std::string(envp) : std::string("data.db");
+    }
     if (sqlite3_open(g_db_path.c_str(), &g_db) != SQLITE_OK) {
         std::cerr << "SQLite open failed: " << sqlite3_errmsg(g_db) << "\n";
         return false;
