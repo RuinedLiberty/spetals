@@ -13,32 +13,41 @@
 
 extern "C" {
 EM_JS(void, update_logged_in_as, (), {
-  if (typeof fetch !== 'function') { Module.logged_in_as = ""; Module.isLoggedIn = false; return; }
-  fetch('/api/me', { credentials: 'include' })
-    .then(function(r){
-      if (!r) return { ok:false };
-      var ok = !!r.ok;
-      return r.json().then(function(j){ return { ok: ok, j: j }; }).catch(function(){ return { ok: ok, j: null }; });
-    })
-        .then(function(res){
-      var ok = res && res.ok;
-      var j = res && res.j || {};
-      if (ok) {
-        var name = (j && (j.username || (j.user && j.user.username) || j.name || j.global_name)) || '';
-        var id = (j && (j.discord_id || j.id || (j.user && j.user.id))) || '';
-        if (name || id) {
-          Module.logged_in_as = 'Logged in as ' + (name || 'User') + (id ? ' ('+id+')' : '');
-        } else {
-          Module.logged_in_as = '';
+  try {
+    if (typeof fetch !== 'function') { Module.logged_in_as = ""; Module.isLoggedIn = false; return; }
+    fetch('/api/me', { credentials: 'include' })
+      .then(function(r){
+        if (!r) return { ok:false, loggedIn:false };
+        if (!r.ok) return { ok:false, loggedIn:false };
+        var ct = (r.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('application/json') === -1) {
+          // Do not consider non-JSON 200 responses as logged in (likely proxying to index.html)
+          return { ok:true, loggedIn:false, j:null };
         }
-        // Treat any ok response as logged in, even if label is empty
-        Module.isLoggedIn = true;
-      } else {
-        Module.logged_in_as = "";
-        Module.isLoggedIn = false;
-      }
-    })
-    .catch(function(){ Module.logged_in_as = ""; Module.isLoggedIn = false; });
+        return r.json().then(function(j){
+          var name = (j && (j.username || (j.user && j.user.username) || j.name || j.global_name)) || '';
+          var id = (j && (j.discord_id || j.id || (j.user && j.user.id))) || '';
+          var hasIdentity = !!(name || id);
+          return { ok:true, loggedIn: hasIdentity, j: j };
+        }).catch(function(){ return { ok:true, loggedIn:false, j:null }; });
+      })
+      .then(function(res){
+        var logged = !!(res && res.loggedIn);
+        if (logged) {
+          var j = res.j || {};
+          var name = (j && (j.username || (j.user && j.user.username) || j.name || j.global_name)) || '';
+          var id = (j && (j.discord_id || j.id || (j.user && j.user.id))) || '';
+          Module.logged_in_as = (name || id) ? ('Logged in as ' + (name || 'User') + (id ? ' ('+id+')' : '')) : '';
+          Module.isLoggedIn = true;
+        } else {
+          Module.logged_in_as = "";
+          Module.isLoggedIn = false;
+        }
+      })
+      .catch(function(){ Module.logged_in_as = ""; Module.isLoggedIn = false; });
+  } catch (e) {
+    Module.logged_in_as = ""; Module.isLoggedIn = false;
+  }
 });
 
 EM_JS(char*, get_logged_in_as, (), {
@@ -53,6 +62,7 @@ EM_JS(int, get_is_logged_in, (), {
   return Module.isLoggedIn ? 1 : 0;
 });
 }
+
 
 
 
