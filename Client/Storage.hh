@@ -5,8 +5,11 @@
 namespace StorageProtocol {
     uint32_t const MAX_LENGTH = 1024;
     extern uint8_t buffer[2 * MAX_LENGTH];
-    void store(char const *, uint32_t);
+        void store(char const *, uint32_t);
     uint32_t retrieve(char const *, uint32_t);
+    void remove(char const *);
+    void remove_by_prefix(char const *);
+
 
     class Encoder {
     public:
@@ -30,6 +33,8 @@ namespace StorageProtocol {
 }
 
 namespace Storage {
-    void retrieve();
+        void retrieve();
     void set();
+    void clear_account_data();
+
 }

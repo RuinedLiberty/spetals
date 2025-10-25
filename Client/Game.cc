@@ -9,6 +9,32 @@
 #include <Shared/Config.hh>
 
 #include <cmath>
+#include <emscripten.h>
+
+extern "C" {
+EM_JS(void, update_logged_in_as, (), {
+  if (typeof fetch !== 'function') { Module.logged_in_as = ""; return; }
+  fetch('/api/me', { credentials: 'include' })
+    .then(function(r){ return r && r.ok ? r.json() : null; })
+    .then(function(j){
+      if (j && j.username && j.discord_id) {
+        Module.logged_in_as = 'Logged in as ' + j.username + ' (' + j.discord_id + ')';
+      } else {
+        Module.logged_in_as = "";
+      }
+    })
+    .catch(function(){ Module.logged_in_as = ""; });
+});
+
+EM_JS(char*, get_logged_in_as, (), {
+  var s = Module.logged_in_as || "";
+  var len = lengthBytesUTF8(s) + 1;
+  var p = _malloc(len);
+  stringToUTF8(s, p, len);
+  return p;
+});
+}
+
 
 static double g_last_time = 0;
 float const MAX_TRANSITION_CIRCLE = 2500;
@@ -68,6 +94,20 @@ void Game::init() {
     title_ui_window.add_child(
         Ui::make_title_info_box()
     );
+            // Logged-in-as (top-left)
+    title_ui_window.add_child([](){
+        return (Ui::Element*) new Ui::HContainer({
+            new Ui::DynamicText(14, [](){
+                static double last = -1e9;
+                if (Game::timestamp - last > 2000) { last = Game::timestamp; update_logged_in_as(); }
+                char *ptr = get_logged_in_as();
+                std::string out;
+                if (ptr && *ptr) { out = std::string(ptr); free(ptr); }
+                return out;
+            }, { .fill = 0xffffffff })
+        }, 10, 10, { .h_justify = Ui::Style::Left, .v_justify = Ui::Style::Top });
+    }());
+
     title_ui_window.add_child(
         Ui::make_panel_buttons()
     );

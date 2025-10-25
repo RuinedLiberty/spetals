@@ -109,6 +109,18 @@ Element *Ui::make_title_info_box() {
 
 Element *Ui::make_panel_buttons() {
    Element *elt = new Ui::HContainer({
+        new Ui::Button(120, 35,
+            new Ui::StaticText(16, "Login"),
+            [](Element *elt, uint8_t e){ if (e == Ui::kClick) DOM::open_page("/auth/login"); },
+            nullptr,
+            { .fill = 0xff43b581, .line_width = 5, .round_radius = 3 }
+        ),
+        new Ui::Button(120, 35,
+            new Ui::StaticText(16, "Logout"),
+            [](Element *elt, uint8_t e){ if (e == Ui::kClick) DOM::open_page("/auth/logout"); },
+            nullptr,
+            { .fill = 0xffc23b22, .line_width = 5, .round_radius = 3 }
+        ),
         new Ui::Button(100, 35, 
             new Ui::StaticText(16, "Settings"), 
             [](Element *elt, uint8_t e){ if (e == Ui::kClick) {

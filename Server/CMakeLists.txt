@@ -70,13 +70,13 @@ endif()
 if(WASM_SERVER)
     set(CMAKE_CXX_COMPILER "em++")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWASM_SERVER=1")
-    add_link_options(-sEXIT_RUNTIME=0 -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message)
-    if (NOT DEBUG) 
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --closure=1")
-    endif()
+    # IMPORTANT: Do NOT enable closure/minification when using large EM_ASM blocks with Node code
+    # It mangles property names like sqlite3.verbose at runtime. Keep readable JS.
+    add_link_options(-sEXIT_RUNTIME=0 -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message -sENVIRONMENT=node)
     add_executable(gardn-server ${SOURCES})
     set(CMAKE_EXECUTABLE_SUFFIX ".js")
 else()
+
     set(CMAKE_CXX_COMPILER "g++")
     add_executable(gardn-server ${SOURCES})
     target_include_directories(gardn-server PRIVATE ${CMAKE_SOURCE_DIR}/uWebSockets/src)
