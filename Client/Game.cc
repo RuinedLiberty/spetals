@@ -24,12 +24,12 @@ EM_JS(void, update_logged_in_as, (), {
       var ok = res && res.ok;
       var j = res && res.j || {};
       if (ok) {
-        var name = (j && (j.username || (j.user && j.user.username) || j.name || j.global_name)) || '';
-        var id = (j && (j.discord_id || j.id || (j.user && j.user.id))) || '';
+                var name = (j && (j.username || (j.user && j.user.username) || j.name || j.global_name)) || "";
+        var id = (j && (j.discord_id || j.id || (j.user && j.user.id))) || "";
         if (name || id) {
           Module.logged_in_as = 'Logged in as ' + (name || 'User') + (id ? ' ('+id+')' : '');
         } else {
-          Module.logged_in_as = '';
+          Module.logged_in_as = "";
         }
         // Treat any ok response as logged in, even if label is empty
         Module.isLoggedIn = true;
