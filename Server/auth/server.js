@@ -96,6 +96,13 @@ db.serialize(() => {
     FOREIGN KEY(account_id) REFERENCES accounts(id)
   )`);
   db.run('CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id)');
+  db.run(`CREATE TABLE IF NOT EXISTS account_mobs (
+    account_id TEXT NOT NULL,
+    mob_id INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY(account_id, mob_id),
+    FOREIGN KEY(account_id) REFERENCES accounts(id)
+  )`);
 });
 
 async function exchangeCodeForToken(code, redirect_uri) {
@@ -130,6 +137,8 @@ async function fetchUser(access_token) {
 }
 
 const app = express();
+app.use(express.json());
+
 
 app.get('/auth/discord/login', (req, res) => {
   const redirect_uri = `${CFG.SITE_BASE_URL}/auth/discord/callback`;
@@ -202,6 +211,63 @@ app.get('/auth/me', (req, res) => {
     if (!row) return res.status(401).send('Unauthorized');
     if (row.banned) return res.status(403).send('Banned');
     res.json({ account_id: row.account_id });
+  });
+});
+
+// Centralized account bootstrap (fetch all account-owned data)
+app.get('/api/account/bootstrap', (req, res) => {
+  const cookies = parseCookies(req.headers.cookie || '');
+  const sid = cookies[CFG.COOKIE_NAME];
+  if (!sid) return res.status(401).send('Unauthorized');
+  const now = nowSec();
+  db.get('SELECT sessions.account_id, accounts.banned FROM sessions JOIN accounts ON sessions.account_id = accounts.id WHERE sessions.id=? AND sessions.revoked=0 AND sessions.expires_at > ? LIMIT 1', [sid, now], (err, sess) => {
+    if (err) return res.status(500).send('DB error');
+    if (!sess) return res.status(401).send('Unauthorized');
+    if (sess.banned) return res.status(403).send('Banned');
+    db.all('SELECT mob_id FROM account_mobs WHERE account_id=?', [sess.account_id], (e2, rows) => {
+      if (e2) return res.status(500).send('DB error');
+      const mobs = (rows || []).map(r => r.mob_id | 0);
+      res.json({ mobs });
+    });
+  });
+});
+
+// Account mob gallery endpoints
+app.get('/api/account/mobs', (req, res) => {
+  const cookies = parseCookies(req.headers.cookie || '');
+  const sid = cookies[CFG.COOKIE_NAME];
+  if (!sid) return res.status(401).send('Unauthorized');
+  const now = nowSec();
+  db.get('SELECT sessions.account_id, accounts.banned FROM sessions JOIN accounts ON sessions.account_id = accounts.id WHERE sessions.id=? AND sessions.revoked=0 AND sessions.expires_at > ? LIMIT 1', [sid, now], (err, sess) => {
+    if (err) return res.status(500).send('DB error');
+    if (!sess) return res.status(401).send('Unauthorized');
+    if (sess.banned) return res.status(403).send('Banned');
+    db.all('SELECT mob_id FROM account_mobs WHERE account_id=?', [sess.account_id], (e2, rows) => {
+      if (e2) return res.status(500).send('DB error');
+      res.json((rows || []).map(r => r.mob_id | 0));
+    });
+  });
+});
+
+app.post('/api/account/mobs', (req, res) => {
+  const cookies = parseCookies(req.headers.cookie || '');
+  const sid = cookies[CFG.COOKIE_NAME];
+  if (!sid) return res.status(401).send('Unauthorized');
+  const now = nowSec();
+  db.get('SELECT sessions.account_id, accounts.banned FROM sessions JOIN accounts ON sessions.account_id = accounts.id WHERE sessions.id=? AND sessions.revoked=0 AND sessions.expires_at > ? LIMIT 1', [sid, now], (err, sess) => {
+    if (err) return res.status(500).send('DB error');
+    if (!sess) return res.status(401).send('Unauthorized');
+    if (sess.banned) return res.status(403).send('Banned');
+    let mobs = req.body && (req.body.mobs || req.body.add || []);
+    if (!Array.isArray(mobs)) mobs = [mobs];
+    mobs = mobs.map(x => parseInt(x, 10)).filter(x => Number.isFinite(x) && x >= 0 && x < 256);
+    if (mobs.length === 0) return res.status(200).send('OK');
+    const stmt = db.prepare('INSERT OR IGNORE INTO account_mobs (account_id, mob_id, created_at) VALUES (?, ?, ?)');
+    for (const m of mobs) stmt.run(sess.account_id, m, now);
+    stmt.finalize(err2 => {
+      if (err2) return res.status(500).send('DB error');
+      res.status(200).send('OK');
+    });
   });
 });
 

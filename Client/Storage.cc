@@ -136,15 +136,8 @@ using namespace StorageProtocol;
 
 void Storage::retrieve() {
     Game::seen_petals[PetalID::kBasic] = 1;
-    {
-        uint32_t len = StorageProtocol::retrieve("mobs", 256);
-        Decoder reader(&StorageProtocol::buffer[0]);
-        while (reader.at < StorageProtocol::buffer + len) {
-            MobID::T mob_id = reader.read<uint8_t>();
-            if (mob_id >= MobID::kNumMobs) break;
-            Game::seen_mobs[mob_id] = 1;
-        }
-    }
+        // No longer load mob gallery from local storage; account owns source of truth.
+    // Kept intentionally empty to avoid stale local data overriding account data.
     {
         uint32_t len = StorageProtocol::retrieve("petals", 256);
         Decoder reader(&StorageProtocol::buffer[0]);
@@ -188,12 +181,8 @@ void Storage::set() {
             if (Game::seen_petals[id]) writer.write<uint8_t>(id);
         StorageProtocol::store("petals", writer.at - writer.base);
     }
-    {
-        Encoder writer(&StorageProtocol::buffer[0]);
-        for (MobID::T id = 0; id < MobID::kNumMobs; ++id)
-            if (Game::seen_mobs[id]) writer.write<uint8_t>(id);
-        StorageProtocol::store("mobs", writer.at - writer.base);
-    }
+        // Do not persist mob gallery locally anymore; server-side account data is authoritative.
+    // Intentionally removed local 'mobs' store.
     {
         Encoder writer(&StorageProtocol::buffer[0]);
         writer.write<std::string>(Game::nickname);

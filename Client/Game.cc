@@ -14,31 +14,59 @@
 extern "C" {
 EM_JS(void, update_logged_in_as, (), {
   if (typeof fetch !== 'function') { Module.logged_in_as = ""; Module.isLoggedIn = false; return; }
-  fetch('/api/me', { credentials: 'include' })
-    .then(function(r){
+  function fetchMe(url){
+    return fetch(url, { credentials: 'include' }).then(function(r){
       if (!r) return { ok:false };
       var ok = !!r.ok;
       return r.json().then(function(j){ return { ok: ok, j: j }; }).catch(function(){ return { ok: ok, j: null }; });
-    })
-        .then(function(res){
-      var ok = res && res.ok;
-      var j = res && res.j || {};
-      if (ok) {
-        var name = (j && (j.username || (j.user && j.user.username) || j.name || j.global_name)) || '';
-        var id = (j && (j.discord_id || j.id || (j.user && j.user.id))) || '';
-        if (name || id) {
-          Module.logged_in_as = 'Logged in as ' + (name || 'User') + (id ? ' ('+id+')' : '');
-        } else {
-          Module.logged_in_as = '';
-        }
-        // Treat any ok response as logged in, even if label is empty
-        Module.isLoggedIn = true;
+    }).catch(function(){ return { ok:false, j:null }; });
+  }
+  // Try /api/me then fall back to /auth/me (for alt servers)
+  fetchMe('/api/me').then(function(res){
+    if (!res.ok) return fetchMe('/auth/me');
+    return res;
+  }).then(function(res){
+    var ok = res && res.ok;
+    var j = res && res.j || {};
+    if (ok) {
+      var name = (j && (j.username || (j.user && j.user.username) || j.name || j.global_name)) || '';
+      var id = (j && (j.discord_id || j.id || (j.user && j.user.id))) || '';
+      if (name || id) {
+        Module.logged_in_as = 'Logged in as ' + (name || 'User') + (id ? ' ('+id+')' : '');
       } else {
-        Module.logged_in_as = "";
-        Module.isLoggedIn = false;
+        Module.logged_in_as = '';
       }
-    })
-    .catch(function(){ Module.logged_in_as = ""; Module.isLoggedIn = false; });
+      Module.isLoggedIn = true;
+      // Fetch centralized account bootstrap (falls back to legacy path)
+      fetch('/api/account/bootstrap', { credentials: 'include' })
+        .then(function(r){ if (!r || !r.ok) return null; return r.json().catch(function(){ return null; }); })
+        .then(function(payload){
+          var arr = (payload && Array.isArray(payload.mobs)) ? payload.mobs : null;
+          if (!arr) {
+            return fetch('/api/account/mobs', { credentials: 'include' })
+              .then(function(r){ if (!r || !r.ok) return []; return r.json().catch(function(){ return []; }); });
+          } else {
+            return arr;
+          }
+        })
+        .then(function(arr){
+          if (Array.isArray(arr)) {
+            if (Module._apply_account_mobs) {
+              var n = Math.min(arr.length, 512);
+              var buf = Module._malloc(n);
+              for (var i=0;i<n;i++){ Module.HEAPU8[buf+i] = arr[i] & 0xff; }
+              Module._apply_account_mobs(buf, n);
+              Module._free(buf);
+            } else {
+              Module.__pendingAccountMobs = arr.slice(0);
+            }
+          }
+        }).catch(function(){});
+    } else {
+      Module.logged_in_as = "";
+      Module.isLoggedIn = false;
+    }
+  });
 });
 
 EM_JS(char*, get_logged_in_as, (), {
@@ -54,7 +82,18 @@ EM_JS(int, get_is_logged_in, (), {
 });
 }
 
-
+extern "C" {
+EMSCRIPTEN_KEEPALIVE void apply_account_mobs(uint8_t const* ids, int len) {
+    // Account is authoritative: clear local view before applying
+    for (int m = 0; m < (int)MobID::kNumMobs; ++m) Game::seen_mobs[m] = 0;
+    if (ids && len > 0) {
+        for (int i = 0; i < len; ++i) {
+            uint8_t id = ids[i];
+            if (id < MobID::kNumMobs) Game::seen_mobs[id] = 1;
+        }
+    }
+}
+}
 
 static double g_last_time = 0;
 float const MAX_TRANSITION_CIRCLE = 2500;
@@ -259,9 +298,25 @@ void Game::tick(double time) {
     Ui::dt = time - g_last_time;
     Ui::lerp_amount = 1 - pow(1 - 0.2, Ui::dt * 60 / 1000);
     g_last_time = time;
-    simulation.tick();
-    
+        simulation.tick();
+
+    // If bootstrap fetched before exports were ready, apply pending account mobs now
+    EM_ASM({
+        if (Module.__pendingAccountMobs && Module._apply_account_mobs) {
+            var arr = Module.__pendingAccountMobs;
+            Module.__pendingAccountMobs = null;
+            var n = Math.min(arr.length|0, 512);
+            if (n > 0) {
+                var buf = Module._malloc(n);
+                for (var i = 0; i < n; ++i) Module.HEAPU8[buf+i] = (arr[i]|0) & 0xff;
+                Module._apply_account_mobs(buf, n);
+                Module._free(buf);
+            }
+        }
+    });
+
     renderer.reset();
+
     game_ui_renderer.set_dimensions(renderer.width, renderer.height);
     game_ui_renderer.reset();
 

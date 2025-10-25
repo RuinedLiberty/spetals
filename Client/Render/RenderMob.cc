@@ -10,6 +10,8 @@
 #include <Client/Game.hh>
 
 #include <cmath>
+#include <emscripten.h>
+
 
 void render_mob(Renderer &ctx, Entity const &ent) {
     uint32_t flags = 0;
@@ -29,8 +31,21 @@ void render_mob(Renderer &ctx, Entity const &ent) {
         };
     }
     draw_static_mob(ent.get_mob_id(), ctx, attrs);
-    if (ent.deletion_animation > 0)
+        if (ent.deletion_animation > 0) {
         Game::seen_mobs[ent.get_mob_id()] = 1;
+                // Try to report kill unlock to account service if logged in
+        EM_ASM({
+            if (typeof Module !== 'undefined' && Module.isLoggedIn) {
+                var id = $0|0;
+                fetch('/api/account/mobs', {
+                    method:'POST',
+                    headers:{ 'Content-Type':'application/json' },
+                    credentials:'include',
+                    body: JSON.stringify({ add:[id] })
+                }).catch(function(){ });
+            }
+        }, ent.get_mob_id());
+    }
     /*
     #ifdef DEBUG
     ctx.set_stroke(0x80ff0000);

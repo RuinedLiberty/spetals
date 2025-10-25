@@ -119,10 +119,16 @@ WebSocketServer::WebSocketServer() {
                 banned INTEGER NOT NULL DEFAULT 0,\
                 ban_reason TEXT\
             )');
-            db.run('CREATE TABLE IF NOT EXISTS discord_links (\
+                        db.run('CREATE TABLE IF NOT EXISTS discord_links (\
                 account_id TEXT NOT NULL,\
                 discord_user_id TEXT NOT NULL UNIQUE,\
                 created_at INTEGER NOT NULL\
+            )');
+            db.run('CREATE TABLE IF NOT EXISTS account_mobs (\
+                account_id TEXT NOT NULL,\
+                mob_id INTEGER NOT NULL,\
+                created_at INTEGER NOT NULL,\
+                PRIMARY KEY(account_id, mob_id)\
             )');
         });
 
@@ -234,7 +240,7 @@ WebSocketServer::WebSocketServer() {
                     return res.end();
                 }
 
-                // API: minimal account info
+                                // API: minimal account info
                 if (req.url.startsWith("/api/me")) {
                     const cookies = parseCookies(req.headers.cookie||"");
                     const tok = cookies[SESS_COOKIE];
@@ -246,6 +252,98 @@ WebSocketServer::WebSocketServer() {
                         res.writeHead(200, { "Content-Type": "application/json" });
                         res.end(JSON.stringify(row));
                     });
+                    return;
+                }
+
+                // Account bootstrap: centralized account data fetch (extend with more fields later)
+                if (req.url.startsWith("/api/account/bootstrap")) {
+                    const cookies = parseCookies(req.headers.cookie||"");
+                    const tok = cookies[SESS_COOKIE];
+                    const sess = tok ? Module.sessions.get(tok) : null;
+                    if (!sess) { res.writeHead(401).end("Unauthorized"); return; }
+                    // Determine account id
+                    let accountId = (Module.accByDiscord && Module.accByDiscord.get(sess.userId));
+                    function ensureAccount(cb) {
+                        if (accountId) return cb(accountId);
+                        db.get('SELECT account_id FROM discord_links WHERE discord_user_id=?', [sess.userId], function(err, row){
+                            if (row && row.account_id) {
+                                if (!Module.accByDiscord) Module.accByDiscord = new Map();
+                                Module.accByDiscord.set(sess.userId, row.account_id);
+                                accountId = row.account_id;
+                            }
+                            cb(accountId);
+                        });
+                    }
+                    ensureAccount(function(acc){
+                        if (!acc) { res.writeHead(200, {"Content-Type":"application/json"}); res.end('{"mobs":[]}'); return; }
+                        db.all('SELECT mob_id FROM account_mobs WHERE account_id=?', [acc], function(err, rows){
+                            if (err) { res.writeHead(500).end('DB Error'); return; }
+                            const mobs = (rows||[]).map(r => (r.mob_id|0));
+                            const payload = JSON.stringify({ mobs });
+                            res.writeHead(200, {"Content-Type":"application/json"});
+                            res.end(payload);
+                        });
+                    });
+                    return;
+                }
+
+                // Account data: mob gallery
+                if (req.url.startsWith("/api/account/mobs")) {
+                    const cookies = parseCookies(req.headers.cookie||"");
+                    const tok = cookies[SESS_COOKIE];
+                    const sess = tok ? Module.sessions.get(tok) : null;
+                    if (!sess) { res.writeHead(401).end("Unauthorized"); return; }
+
+                    let accountId = (Module.accByDiscord && Module.accByDiscord.get(sess.userId));
+                    function ensureAccount(cb) {
+                        if (accountId) return cb(accountId);
+                        db.get('SELECT account_id FROM discord_links WHERE discord_user_id=?', [sess.userId], function(err, row){
+                            if (row && row.account_id) {
+                                if (!Module.accByDiscord) Module.accByDiscord = new Map();
+                                Module.accByDiscord.set(sess.userId, row.account_id);
+                                accountId = row.account_id;
+                            }
+                            cb(accountId);
+                        });
+                    }
+
+                    if (req.method === 'GET') {
+                        ensureAccount(function(acc){
+                            if (!acc) { res.writeHead(200, {"Content-Type":"application/json"}); res.end('[]'); return; }
+                            db.all('SELECT mob_id FROM account_mobs WHERE account_id=?', [acc], function(err, rows){
+                                if (err) { res.writeHead(500).end('DB Error'); return; }
+                                const arr = (rows||[]).map(r => (r.mob_id|0));
+                                res.writeHead(200, {"Content-Type":"application/json"});
+                                res.end(JSON.stringify(arr));
+                            });
+                        });
+                        return;
+                    }
+
+                    if (req.method === 'POST') {
+                        let body = '';
+                        req.on('data', function(c){ body += c; if (body.length > 1e6) req.connection.destroy(); });
+                        req.on('end', function(){
+                            let payload = {};
+                            try { payload = JSON.parse(body||'{}'); } catch(e) { payload = {}; }
+                            let mobs = payload && (payload.mobs || payload.add || []);
+                            if (!Array.isArray(mobs)) mobs = [mobs];
+                            mobs = mobs.map(function(x){ return parseInt(x,10); }).filter(function(x){ return Number.isFinite(x) && x >= 0 && x < 256; });
+                            ensureAccount(function(acc){
+                                if (!acc || mobs.length === 0) { res.writeHead(200).end('OK'); return; }
+                                const now = Math.floor(Date.now()/1000);
+                                const stmt = db.prepare('INSERT OR IGNORE INTO account_mobs (account_id, mob_id, created_at) VALUES (?, ?, ?)');
+                                for (const m of mobs) stmt.run(acc, m, now);
+                                stmt.finalize(function(err){
+                                    if (err) { res.writeHead(500).end('DB Error'); return; }
+                                    res.writeHead(200).end('OK');
+                                });
+                            });
+                        });
+                        return;
+                    }
+
+                    res.writeHead(405).end('Method Not Allowed');
                     return;
                 }
 
