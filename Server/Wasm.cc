@@ -248,7 +248,7 @@ WebSocketServer::WebSocketServer() {
             }
         });
 
-                const port = (process.env.PORT ? parseInt(process.env.PORT, 10) : $0) || $0;
+        const port = $0;
         server.listen(port, function() {
             console.log("Server running at http://localhost:" + port);
         });
