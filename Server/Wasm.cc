@@ -202,8 +202,10 @@ WebSocketServer::WebSocketServer() {
             });
         }
 
-        const server = http.createServer(async function(req, res) {
+                const server = http.createServer(async function(req, res) {
             try {
+                // Healthcheck
+                if (req.url === "/healthz") { res.writeHead(200).end("ok"); return; }
                 // OAuth routes
                 if (req.url.startsWith("/auth/login")) {
                     if (!DISCORD.client_id || !DISCORD.client_secret) {
@@ -321,12 +323,38 @@ WebSocketServer::WebSocketServer() {
             }
         });
 
-        const port = (process.env.PORT ? parseInt(process.env.PORT, 10) : $0) || $0;
+                        const port = (process.env.PORT ? parseInt(process.env.PORT, 10) : $0) || $0;
         server.listen(port, function() {
             console.log("Server running at http://localhost:" + port);
         });
         
-        const wss = new WSS.Server({ "server": server });
+        // WebSocket server with manual upgrade to accept all paths (including /ws/)
+        const wss = new WSS.Server({ noServer: true });
+
+
+
+
+
+
+
+                // Handle upgrades and forward to ws server regardless of path
+        server.on('upgrade', function(req, socket, head) {
+            try {
+                const hasCookie = !!(req.headers && req.headers.cookie);
+                const url = req.url || '';
+                const host = req.headers.host || '';
+                const xfhost = req.headers['x-forwarded-host'] || '';
+                const origin = req.headers.origin || '';
+                console.log('[upgrade]', url, 'host=', host, 'xfhost=', xfhost, 'origin=', origin, 'cookie=', hasCookie);
+            } catch(e) {}
+            try {
+                wss.handleUpgrade(req, socket, head, function(ws) {
+                    wss.emit('connection', ws, req);
+                });
+            } catch(e) {
+                try { socket.destroy(); } catch(_) {}
+            }
+        });
 
         // Periodic session cleanup
         setInterval(function(){ try { db.run('DELETE FROM sessions WHERE expires_at < ?', [Date.now()]); } catch(e){} }, 60*60*1000);
@@ -337,34 +365,22 @@ WebSocketServer::WebSocketServer() {
             Module.ws_connections[ws_id] = ws;
             curr_id = (curr_id + 1) | 0;
 
-            // Basic origin check to mitigate CSRF over WS
-            try {
-                const origin = req.headers.origin || "";
-                if (origin) {
-                    const o = new URL(origin);
-                    const host = req.headers.host || "";
-                    if (o.host !== host) {
-                        try { ws.close(4003, "Invalid origin"); } catch(e){}
-                        return;
-                    }
-                }
-            } catch(e) {}
+                        // Origin check disabled to avoid proxy host/origin mismatches breaking WS
+            // If needed, re-enable with a stricter allowlist later.
 
-            // Authenticate via cookie against DB
+
+            // Authenticate via cookie against DB (optional — allow guest connect)
             const cookies = parseCookies(req.headers.cookie||"");
             const tok = cookies[SESS_COOKIE];
             getSessionByToken(tok, function(sess){
-                if (!sess) {
-                    try { ws.close(4002, "Auth Required"); } catch(e){}
-                    return;
+                if (sess) {
+                    const prev = Module.userActiveWs.get(sess.userId);
+                    if (prev !== undefined && Module.ws_connections[prev]) {
+                        try { Module.ws_connections[prev].close(4002, "Another session started"); } catch(e){}
+                    }
+                    Module.userActiveWs.set(sess.userId, ws_id);
+                    Module.sessionByWs.set(ws_id, sess.userId);
                 }
-                // Single-session enforcement
-                const prev = Module.userActiveWs.get(sess.userId);
-                if (prev !== undefined && Module.ws_connections[prev]) {
-                    try { Module.ws_connections[prev].close(4002, "Another session started"); } catch(e){}
-                }
-                Module.userActiveWs.set(sess.userId, ws_id);
-                Module.sessionByWs.set(ws_id, sess.userId);
 
                 _on_connect(ws_id);
 
@@ -385,6 +401,7 @@ WebSocketServer::WebSocketServer() {
                 });
             });
         })
+
     })(), SERVER_PORT, INCOMING_BUFFER, MAX_BUFFER_LEN);
 }
 
