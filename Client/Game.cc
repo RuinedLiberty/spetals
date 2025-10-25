@@ -117,7 +117,7 @@ void Game::init() {
     title_ui_window.add_child(
         Ui::make_title_info_box()
     );
-            // Logged-in-as (top-left)
+    // Logged-in-as (top-left)
     title_ui_window.add_child([](){
         return (Ui::Element*) new Ui::HContainer({
             new Ui::DynamicText(14, [](){
