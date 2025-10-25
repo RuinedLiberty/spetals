@@ -115,9 +115,6 @@ set "PORT=%GARDN_PORT%"
 call :kill >nul
 pushd "%REPO%"
 
-rem Load environment variables from .env files if present (root .env and Server\.env)
-call :load_env
-
 rem pass PORT env into node (server reads process.env.PORT or falls back to its default)
 set "PORT=%GARDN_PORT%"
 node Server\build\gardn-server.js
@@ -140,31 +137,3 @@ exit /b 0
 rd /s /q "%REPO%Client\build" 2>nul
 rd /s /q "%REPO%Server\build" 2>nul
 exit /b 0
-
-rem ====== helpers ======
-:load_env
-if exist "%REPO%.env" call :load_env_file "%REPO%.env"
-if exist "%REPO%Server\.env" call :load_env_file "%REPO%Server\.env"
-exit /b 0
-
-:load_env_file
-for /f "usebackq tokens=1,* delims== eol=#" %%K in (%~1) do (
-  set "KEY=%%K"
-  set "VAL=%%L"
-  rem ignore lines starting with ';'
-  if "!KEY:~0,1!"==";" (
-    rem skip comment lines starting with ';'
-  ) else (
-    rem trim surrounding quotes in value if present
-    if defined VAL (
-      if "!VAL:~0,1!"=="\"" set "VAL=!VAL:~1!"
-      if "!VAL:~-1!"=="\"" set "VAL=!VAL:~0,-1!"
-    )
-    if defined KEY (
-      set "!KEY!=!VAL!"
-    )
-  )
-)
-exit /b 0
-
-
