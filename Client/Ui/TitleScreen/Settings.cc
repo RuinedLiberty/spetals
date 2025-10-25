@@ -5,8 +5,23 @@
 #include <Client/Ui/Extern.hh>
 #include <Client/Ui/StaticText.hh>
 
+#include <Client/DOM.hh>
 #include <Client/Game.hh>
 #include <Client/Input.hh>
+#include <cstdlib>
+
+
+extern "C" {
+    void update_logged_in_as();
+    char* get_logged_in_as();
+}
+
+static bool is_logged_in_settings() {
+    char *ptr = get_logged_in_as();
+    bool ok = (ptr && *ptr);
+    if (ptr) free(ptr);
+    return ok;
+}
 
 using namespace Ui;
 
@@ -25,6 +40,12 @@ Element *Ui::make_settings_panel() {
             new Ui::ToggleButton(30, &Game::show_debug),
             new Ui::StaticText(16, "Debug stats")
         }, 0, 10, {.h_justify = Style::Left }),
+        new Ui::Button(140, 40,
+            new Ui::StaticText(16, "Logout"),
+            [](Element *elt, uint8_t e){ if (e == Ui::kClick) DOM::open_page("/auth/logout"); },
+            nullptr,
+            { .fill = 0xffc23b22, .line_width = 5, .round_radius = 4, .should_render = [](){ return is_logged_in_settings(); } }
+        ),
         new Ui::StaticText(12, "Made by bismuth (trigonal-bacon)"),
         new Ui::StaticText(12, "Asset credits: M28 and affiliates")
     }, 20, 10, { 

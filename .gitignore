@@ -5,3 +5,5 @@ node_modules/
 .vscode/
 gardn-client.js
 gardn-client.wasm
+.env
+Server/.env

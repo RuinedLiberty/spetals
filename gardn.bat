@@ -59,33 +59,72 @@ exit /b 0
 
 :server
 pushd "%REPO%Server"
+rem Kill possible stray processes that can lock files
+for %%P in (ninja.exe cmake.exe node.exe) do taskkill /IM %%P /F >nul 2>nul
+if not exist build mkdir build
+rem Try to clear possible locked ninja artifacts (ignore errors)
+del /f /q build\.ninja_log build\.ninja_deps 2>nul
+
+
 if not exist build\CMakeCache.txt (
   "%CMAKE%" -S . -B build -G Ninja ^
     -DCMAKE_TOOLCHAIN_FILE=%EMSDK%\upstream\emscripten\cmake\Modules\Platform\Emscripten.cmake ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DWASM_SERVER=1 ^
     -DCMAKE_C_COMPILER_LAUNCHER="cmd.exe;/c" ^
-    -DCMAKE_CXX_COMPILER_LAUNCHER="cmd.exe;/c"
+    -DCMAKE_CXX_COMPILER_LAUNCHER="cmd.exe;/c" || (
+      rem If configure fails (e.g., due to ninja log lock), wipe build dir and try once more
+      rd /s /q build 2>nul & mkdir build & ^
+      "%CMAKE%" -S . -B build -G Ninja ^
+        -DCMAKE_TOOLCHAIN_FILE=%EMSDK%\upstream\emscripten\cmake\Modules\Platform\Emscripten.cmake ^
+        -DCMAKE_BUILD_TYPE=Release ^
+        -DWASM_SERVER=1 ^
+        -DCMAKE_C_COMPILER_LAUNCHER="cmd.exe;/c" ^
+        -DCMAKE_CXX_COMPILER_LAUNCHER="cmd.exe;/c"
+    )
 )
-"%CMAKE%" --build build --target gardn-server --parallel || (popd & exit /b 1)
+"%CMAKE%" --build build --target gardn-server --parallel || (
+  rem If build fails, wipe build dir and rebuild once
+  rd /s /q build 2>nul & ^
+  "%CMAKE%" -S . -B build -G Ninja ^
+    -DCMAKE_TOOLCHAIN_FILE=%EMSDK%\upstream\emscripten\cmake\Modules\Platform\Emscripten.cmake ^
+    -DCMAKE_BUILD_TYPE=Release ^
+    -DWASM_SERVER=1 ^
+    -DCMAKE_C_COMPILER_LAUNCHER="cmd.exe;/c" ^
+    -DCMAKE_CXX_COMPILER_LAUNCHER="cmd.exe;/c" && ^
+  "%CMAKE%" --build build --target gardn-server --parallel || (popd & exit /b 1)
+)
 
-rem ws is required by gardn-server.js; install under Server so Node can resolve from that file's path
-if not exist node_modules\ws (
-  npm i --silent ws
+rem Ensure Node deps for the server runtime (ws, sqlite3)
+if not exist node_modules (
+  npm ci --silent
+) else (
+  npm i --silent
 )
 popd
 exit /b 0
 
+
+
 :run
 set "GARDN_PORT=%PORT%"
+rem If script-default port (9009) is being used, force runtime to 9001 for localhost
+if "%GARDN_PORT%"=="9009" set "GARDN_PORT=9001"
+rem Update PORT to the effective port before attempting to kill
+set "PORT=%GARDN_PORT%"
 call :kill >nul
 pushd "%REPO%"
+
+rem Load environment variables from .env files if present (root .env and Server\.env)
+call :load_env
 
 rem pass PORT env into node (server reads process.env.PORT or falls back to its default)
 set "PORT=%GARDN_PORT%"
 node Server\build\gardn-server.js
 popd
 exit /b 0
+
+
 
 :all
 call "%~f0" client            || exit /b 1
@@ -101,3 +140,31 @@ exit /b 0
 rd /s /q "%REPO%Client\build" 2>nul
 rd /s /q "%REPO%Server\build" 2>nul
 exit /b 0
+
+rem ====== helpers ======
+:load_env
+if exist "%REPO%.env" call :load_env_file "%REPO%.env"
+if exist "%REPO%Server\.env" call :load_env_file "%REPO%Server\.env"
+exit /b 0
+
+:load_env_file
+for /f "usebackq tokens=1,* delims== eol=#" %%K in (%~1) do (
+  set "KEY=%%K"
+  set "VAL=%%L"
+  rem ignore lines starting with ';'
+  if "!KEY:~0,1!"==";" (
+    rem skip comment lines starting with ';'
+  ) else (
+    rem trim surrounding quotes in value if present
+    if defined VAL (
+      if "!VAL:~0,1!"=="\"" set "VAL=!VAL:~1!"
+      if "!VAL:~-1!"=="\"" set "VAL=!VAL:~0,-1!"
+    )
+    if defined KEY (
+      set "!KEY!=!VAL!"
+    )
+  )
+)
+exit /b 0
+
+
