@@ -11,8 +11,10 @@
 class WebSocket;
 #else
 #include <App.h>
+#include <Server/PerSocketData.hh>
 class Client;
-typedef uWS::WebSocket<false, true, Client> WebSocket;
+// Note: WebSocket user data is PerSocketData
+typedef uWS::WebSocket<false, true, PerSocketData> WebSocket;
 #endif
 
 class GameInstance;
@@ -25,6 +27,9 @@ public:
     WebSocket *ws;
     uint8_t verified = 0;
     uint8_t seen_arena = 0;
+    // Server-only opaque account id (UUID v4 as 36-char string)
+    std::string account_id;
+
     Client();
     void init();
     void remove();
