@@ -88,7 +88,12 @@ void DOM::update_text(char const *name, std::string const &contents, uint32_t ma
 void DOM::open_page(char const *url) {
     EM_ASM({
         try {
-            window.open(UTF8ToString($0));
+            const u = UTF8ToString($0);
+            if (u.startsWith('http://') || u.startsWith('https://')) {
+                window.open(u);
+            } else {
+                window.location.assign(u);
+            }
         } catch(e) {}
     }, url);
 }

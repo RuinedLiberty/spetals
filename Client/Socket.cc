@@ -47,24 +47,80 @@ void Socket::connect(std::string const url) {
     std::cout << "Connecting to " << url << '\n';
     EM_ASM({
         let string = UTF8ToString($1);
+
         function connect() {
+            // Avoid duplicate connects
+            if (Module.socket && (Module.socket.readyState === 0 || Module.socket.readyState === 1)) return;
             let socket = Module.socket = new WebSocket(string);
             socket.binaryType = "arraybuffer";
-            socket.onopen = function() {
+                        socket.onopen = function() {
+                try { update_logged_in_as(); } catch(e) {}
                 _on_message(0, 0, 0);
             };
-            socket.onclose = function(a) {
+                        socket.onclose = function(a) {
                 _on_message(2, a.code, stringToNewUTF8(a.reason));
-                setTimeout(connect, 1000);
+                                                                // If we were navigating for auth (back from Discord), refresh login state
+                                try { if (a.code === 1005) { update_logged_in_as(); } } catch(e) {}
+
+
+
+                // Only retry if this tab is active
+                if (Module.shouldAttemptConnection && Module.shouldAttemptConnection()) {
+                    Module.scheduleConnect ? Module.scheduleConnect(1000) : setTimeout(connect, 1000);
+                }
             };
             socket.onmessage = function(event) {
                 HEAPU8.set(new Uint8Array(event.data), $0);
                 _on_message(1, event.data.byteLength, 0);
             };
         }
-        setTimeout(connect, 1000);
+
+        if (!Module._socketInit) {
+            Module._socketInit = true;
+            Module.socketReconnectTimer = null;
+                                    Module.shouldAttemptConnection = function() {
+                try {
+                    // Active iff tab is visible and focused
+                    return document.visibilityState === 'visible' && document.hasFocus();
+                } catch (e) {
+                    return true;
+                }
+            };
+            Module.clearReconnect = function() {
+                if (Module.socketReconnectTimer) { clearTimeout(Module.socketReconnectTimer); Module.socketReconnectTimer = null; }
+            };
+            Module.scheduleConnect = function(delay) {
+                Module.clearReconnect();
+                if (!Module.shouldAttemptConnection()) return;
+                Module.socketReconnectTimer = setTimeout(connect, delay || 0);
+            };
+                        // React to visibility/focus changes
+            document.addEventListener('visibilitychange', function() {
+                // On becoming visible, refresh login state first
+                if (document.visibilityState === 'visible') { try { update_logged_in_as(); } catch(e) {} }
+
+                                if (Module.shouldAttemptConnection()) {
+                    Module.scheduleConnect(0);
+                } else {
+                    // Hidden: stop reconnect attempts; keep existing connection (server may close if a new tab connects)
+                    Module.clearReconnect();
+                }
+
+            });
+            window.addEventListener('focus', function() {
+                if (Module.shouldAttemptConnection()) Module.scheduleConnect(0);
+            });
+                                    window.addEventListener('blur', function() {
+                // No action on blur. We rely on visibility change to close.
+            });
+        }
+
+        if (Module.shouldAttemptConnection && Module.shouldAttemptConnection()) {
+            Module.scheduleConnect ? Module.scheduleConnect(1000) : setTimeout(connect, 1000);
+        }
     }, INCOMING_PACKET, url.c_str());
 }
+
 
 void Socket::send(uint8_t *ptr, uint32_t len) {
     if (ready == 0) return; 

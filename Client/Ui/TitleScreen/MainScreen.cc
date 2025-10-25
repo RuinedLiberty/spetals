@@ -14,45 +14,100 @@
 #include <Shared/Config.hh>
 
 #include <format>
+#include <cstdlib>
+#include <emscripten.h>
+
+
+extern "C" {
+    void update_logged_in_as();
+    char* get_logged_in_as();
+}
+
+extern "C" {
+    int get_is_logged_in();
+}
+
+
+static bool is_logged_in() {
+    // prefer the explicit boolean the JS sets
+    int flag = get_is_logged_in();
+    if (flag) return true;
+    char *ptr = get_logged_in_as();
+    bool ok = (ptr && *ptr);
+    if (ptr) free(ptr);
+    return ok;
+}
+
+
 
 using namespace Ui;
 
 Element *Ui::make_title_input_box() {
     Ui::Element *title = new Ui::VContainer({
         new Ui::Element(0, 60),
+        // Outer gate: show Discord login first if not logged in
         new Ui::Choose(
-            new Ui::StaticText(40, "Connecting..."),
-            new Ui::VContainer({
-                new Ui::StaticText(20, "This pretty little flower is called..."),
-                new Ui::HContainer({
-                    new Ui::TextInput(Game::nickname, 400, 50, MAX_NAME_LENGTH, {
-                        .line_width = 5,
-                        .round_radius = 5,
-                        .animate = [](Element *elt, Renderer &ctx) { 
-                            ctx.translate(0, (elt->animation - 1) * ctx.height * 0.6);
-                        },
-                        .should_render = [](){
-                            return !Game::in_game() && Game::transition_circle <= 0;
-                        }
-                    }),
-                    new Ui::Button(110, 36, 
-                        new Ui::StaticText(25, "Spawn"), 
-                        [](Element *elt, uint8_t e){ if (e == Ui::kClick) Game::spawn_in(); },
-                        [](){ return Game::in_game() != 0; },
-                        { .fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
-                    )
-                }, 0, 10,{}),
-                new Ui::StaticText(14, "(or press ENTER to spawn)")
-            }, 10, 5, { .animate = [](Element *elt, Renderer &ctx) {
-                ctx.translate(0, (elt->animation - 1) * ctx.height);
-            } }),
-            [](){ return Game::socket.ready; }
+            // Not logged in: show Discord login button regardless of socket state
+            new Ui::HContainer({
+                new Ui::Button(280, 50,
+                    new Ui::StaticText(20, "Sign in with Discord"),
+                                        [](Element *elt, uint8_t e){ if (e == Ui::kClick) {
+                        // only warn about leaving if in game; title screen should not prompt
+                                                EM_ASM({ try { window.onbeforeunload = null; } catch(e) {} });
+
+                        DOM::open_page("/auth/login");
+                    } },
+
+                    nullptr,
+                    { .fill = 0xff5865f2, .line_width = 5, .round_radius = 5,
+                      .animate = [](Element *elt, Renderer &ctx) {
+                          ctx.translate(0, (elt->animation - 1) * ctx.height * 0.6);
+                      },
+                      .should_render = [](){
+                          return !Game::in_game() && Game::transition_circle <= 0;
+                      }
+                    }
+                )
+            }, 0, 10, {}),
+            // Logged in: if socket not ready, show Connecting..., else name + spawn
+            new Ui::Choose(
+                new Ui::StaticText(40, "Connecting..."),
+                new Ui::VContainer({
+                    new Ui::StaticText(20, "This pretty little flower is called..."),
+                    new Ui::HContainer({
+                        new Ui::TextInput(Game::nickname, 400, 50, MAX_NAME_LENGTH, {
+                            .line_width = 5,
+                            .round_radius = 5,
+                            .animate = [](Element *elt, Renderer &ctx) { 
+                                ctx.translate(0, (elt->animation - 1) * ctx.height * 0.6);
+                            },
+                            .should_render = [](){
+                                return !Game::in_game() && Game::transition_circle <= 0;
+                            }
+                        }),
+                        new Ui::Button(110, 36, 
+                            new Ui::StaticText(25, "Spawn"), 
+                            [](Element *elt, uint8_t e){ if (e == Ui::kClick) Game::spawn_in(); },
+                            [](){ return Game::in_game() != 0; },
+                            { .fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
+                        )
+                    }, 0, 10,{}),
+                    new Ui::StaticText(14, "(or press ENTER to spawn)")
+                }, 10, 5, { .animate = [](Element *elt, Renderer &ctx) {
+                    ctx.translate(0, (elt->animation - 1) * ctx.height);
+                } }),
+                [](){ return Game::socket.ready; }
         ),
+            [](){ return is_logged_in() ? 1 : 0; }
+        ),
+
         new Ui::Element(0,20),
         new Ui::StaticText(16, "open-source florr.io pvp clone"),
     }, 0, 0, { .animate = [](Element *elt, Renderer &ctx){}, .should_render = [](){ return Game::should_render_title_ui(); } });
     return title;
 }
+
+
 
 Element *Ui::make_title_info_box() {
     Element *elt = new Ui::Choose(
@@ -109,18 +164,6 @@ Element *Ui::make_title_info_box() {
 
 Element *Ui::make_panel_buttons() {
    Element *elt = new Ui::HContainer({
-        new Ui::Button(120, 35,
-            new Ui::StaticText(16, "Login"),
-            [](Element *elt, uint8_t e){ if (e == Ui::kClick) DOM::open_page("/auth/login"); },
-            nullptr,
-            { .fill = 0xff43b581, .line_width = 5, .round_radius = 3 }
-        ),
-        new Ui::Button(120, 35,
-            new Ui::StaticText(16, "Logout"),
-            [](Element *elt, uint8_t e){ if (e == Ui::kClick) DOM::open_page("/auth/logout"); },
-            nullptr,
-            { .fill = 0xffc23b22, .line_width = 5, .round_radius = 3 }
-        ),
         new Ui::Button(100, 35, 
             new Ui::StaticText(16, "Settings"), 
             [](Element *elt, uint8_t e){ if (e == Ui::kClick) {
@@ -192,6 +235,7 @@ Element *Ui::make_panel_buttons() {
    }, 10, 10, { .should_render = [](){ return Game::should_render_title_ui(); }, .h_justify = Style::Left, .v_justify = Style::Bottom });
    return elt;
 }
+
 
 Element *Ui::make_debug_stats() {
     Element *elt = new Ui::VContainer({
