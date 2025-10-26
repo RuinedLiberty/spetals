@@ -135,8 +135,11 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math --closure=1")
 endif()
 
-add_link_options(-sEXPORTED_RUNTIME_METHODS=stringToNewUTF8)
-add_link_options(-sEXPORTED_FUNCTIONS=_main,_key_event,_mouse_event,_touch_event,_wheel_event,_clipboard_event,_loop,_on_message)
+# Export runtime helpers used by EM_JS/EM_ASM code
+add_link_options(-sEXPORTED_RUNTIME_METHODS=UTF8ToString,stringToUTF8,lengthBytesUTF8,stringToNewUTF8)
+# Export functions used from JS glue
+add_link_options(-sEXPORTED_FUNCTIONS=_main,_key_event,_mouse_event,_touch_event,_wheel_event,_clipboard_event,_loop,_on_message,_malloc,_free)
+
 
 add_executable(gardn-client ${SRCS})
 set(CMAKE_EXECUTABLE_SUFFIX ".js")
