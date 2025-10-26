@@ -171,7 +171,6 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
 }
 
 void Client::on_disconnect(WebSocket *ws, int code, std::string_view message) {
-    std::printf("disconnect: [%d]\n", code);
 #ifndef WASM_SERVER
     PerSocketData *psd = ws->getUserData();
     Client *client = (psd ? psd->client : nullptr);
@@ -179,8 +178,16 @@ void Client::on_disconnect(WebSocket *ws, int code, std::string_view message) {
     Client *client = ws->getUserData();
 #endif
     if (client == nullptr) return;
+    #ifndef WASM_SERVER
+    // Log detailed disconnect info if available (native server)
+    if (!client->account_id.empty()) {
+        std::cout << "Client disconnected: account_id=" << client->account_id << ", code=" << code << "\n";
+    }
+#endif
+
     client->remove();
 }
+
 
 
 bool Client::check_invalid(bool valid) {

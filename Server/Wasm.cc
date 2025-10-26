@@ -32,7 +32,7 @@ static uint8_t INCOMING_BUFFER[MAX_BUFFER_LEN] = {0};
 
 extern "C" {
     void on_connect(int ws_id) {
-        std::printf("client connect: [%d]\n", ws_id);
+        
         WebSocket *ws = new WebSocket(ws_id);
         WS_MAP.insert({ws_id, ws});
     }
@@ -40,10 +40,10 @@ extern "C" {
     void on_disconnect(int ws_id, int reason) {
         auto iter = WS_MAP.find(ws_id);
         if (iter == WS_MAP.end()) {
-            std::printf("unknown ws disconnect: [%d]", ws_id);
+            
             return;
         }
-        std::printf("client disconnect: [%d]\n", ws_id);
+        
         Client::on_disconnect(iter->second, reason, {});
         WS_MAP.erase(ws_id);
         delete iter->second;
@@ -378,8 +378,9 @@ WebSocketServer::WebSocketServer() {
             Module.userActiveWs.set(sess.userId, ws_id);
             Module.sessionByWs.set(ws_id, sess.userId);
 
-            // Log account id and discord display
-                                                                                    const proceed = (accountId) => {
+                        // Log account id and discord display
+            let accountIdForConn = null;
+                                                                                    const proceed = (accountId) => { accountIdForConn = accountId || null;
                 const discordDisplay = (sess.username || sess.userId || 'unknown');
                 console.log('Client connected: account_id=' + (accountId || 'unknown') + ', discord=' + discordDisplay);
                 // Create native WebSocket, then set account, then seed gallery from DB and push
@@ -429,6 +430,7 @@ WebSocketServer::WebSocketServer() {
                 if (uid && Module.userActiveWs.get(uid) === ws_id)
                     Module.userActiveWs.delete(uid);
                 Module.sessionByWs.delete(ws_id);
+                console.log('Client disconnected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + (sess.username || sess.userId || 'unknown') + ', code=' + reason);
                 _on_disconnect(ws_id, reason);
                 delete Module.ws_connections[ws_id];
             });
