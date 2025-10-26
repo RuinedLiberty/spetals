@@ -17,6 +17,15 @@ namespace AuthDB {
     // Returns true if valid (and not banned), filling account_id_out with UUID (36-chars)
     bool validate_session_and_get_account(const std::string &sid, std::string &account_id_out);
 
-    // Fetch discord username by account id (if stored). Returns true if found.
+        // Fetch discord username by account id (if stored). Returns true if found.
     bool get_discord_username(const std::string &account_id, std::string &username_out);
+
+    // Record a mob kill for this account. mob_id is the numeric MobID::T.
+    // Returns true on success.
+    bool record_mob_kill(const std::string &account_id, int mob_id);
+
+    // Fetch list of mob_ids this account has killed/seen. Returns true on success.
+    bool get_mob_ids(const std::string &account_id, std::vector<int> &mob_ids_out);
 }
+
+

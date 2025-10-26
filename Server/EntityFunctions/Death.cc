@@ -2,6 +2,14 @@
 
 #include <Server/PetalTracker.hh>
 #include <Server/Spawn.hh>
+#ifndef WASM_SERVER
+#include <Server/AuthDB.hh>
+#else
+#include <Server/GalleryStore.hh>
+#endif
+#include <Server/AccountLink.hh>
+#include <Server/Server.hh>
+
 
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
@@ -9,6 +17,7 @@
 
 #include <algorithm>
 #include <iostream>
+
 
 static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops, float x, float y) {
     #ifdef DEBUG
@@ -53,9 +62,34 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
     if (ent.score_reward > 0 && sim->ent_exists(ent.last_damaged_by) && !natural_despawn) {
         EntityID killer_id = sim->get_ent(ent.last_damaged_by).base_entity;
         _add_score(sim, killer_id, ent);
+        // If this was a mob death, persist kill to the killer's account and push update
+        if (ent.has_component(kMob)) {
+            std::string acc = AccountLink::get_account_for_entity(killer_id);
+            if (!acc.empty()) {
+                std::cout << "Death: mob=\"" << (int)ent.get_mob_id() << "\" killed by account=\"" << acc << "\"\n";
+#ifndef WASM_SERVER
+                if (!AuthDB::record_mob_kill(acc, (int)ent.get_mob_id())) {
+                    std::cerr << "Death: record_mob_kill failed for account=\"" << acc << "\"\n";
+                } else {
+                    std::cout << "Death: record_mob_kill success for account=\"" << acc << "\"\n";
+                }
+#else
+                GalleryStore::record_kill(acc, (int)ent.get_mob_id());
+#endif
+                Server::game.send_mob_gallery_to_account(acc);
+            } else {
+                std::cout << "Death: mob killed but no account mapping for killer entity id=" << killer_id.id << "\n";
+            }
+        }
+
     }
     if (ent.has_component(kFlower) && sim->ent_alive(ent.get_parent())) {
+#ifndef WASM_SERVER
+        // Unmap this player entity from account link on death
+        AccountLink::unmap_player(ent.id);
+#endif
         Entity &camera = sim->get_ent(ent.get_parent());
+
         EntityID killer_id = sim->ent_exists(ent.last_damaged_by) ?
             sim->get_ent(ent.last_damaged_by).base_entity : NULL_ENTITY;
         if (sim->ent_alive(killer_id)) {

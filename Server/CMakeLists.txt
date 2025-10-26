@@ -29,8 +29,11 @@ set(SOURCES
     Server.cc
     Simulation.cc
     Spawn.cc
-    TeamManager.cc
+        TeamManager.cc
+    AccountLink.cc
+    GalleryStore.cc
     ../Helpers/Math.cc
+
     ../Helpers/UTF8.cc
     ../Helpers/Vector.cc
     ../Shared/Arena.cc
@@ -42,6 +45,7 @@ set(SOURCES
     ../Shared/Simulation.cc
     ../Shared/StaticData.cc
 )
+
 
 if(WASM_SERVER)
     set(SOURCES ${SOURCES} Wasm.cc)
@@ -73,7 +77,11 @@ if(WASM_SERVER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWASM_SERVER=1")
     # IMPORTANT: Do NOT enable closure/minification when using large EM_ASM blocks with Node code
     # It mangles property names like sqlite3.verbose at runtime. Keep readable JS.
-    add_link_options(-sEXIT_RUNTIME=0 -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message -sENVIRONMENT=node)
+                    add_link_options(-sEXIT_RUNTIME=0 -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message,_set_ws_account,_malloc,_free -sEXPORTED_RUNTIME_METHODS=lengthBytesUTF8,stringToUTF8 -sENVIRONMENT=node)
+
+
+
+
     add_executable(gardn-server ${SOURCES})
     set(CMAKE_EXECUTABLE_SUFFIX ".js")
 else()

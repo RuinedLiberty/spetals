@@ -12,6 +12,19 @@
 
 std::unordered_map<int, WebSocket *> WS_MAP;
 
+extern "C" {
+    void set_ws_account(int ws_id, const char *account_id);
+}
+
+extern "C" void set_ws_account(int ws_id, const char *account_id) {
+    auto it = WS_MAP.find(ws_id);
+    if (it == WS_MAP.end() || !account_id) return;
+    it->second->getUserData()->account_id = std::string(account_id);
+    std::cout << "WASM: set_ws_account ws_id=" << ws_id << " account_id=\"" << it->second->getUserData()->account_id << "\"\n";
+}
+
+
+
 size_t const MAX_BUFFER_LEN = 1024;
 static uint8_t INCOMING_BUFFER[MAX_BUFFER_LEN] = {0};
 
@@ -309,11 +322,24 @@ WebSocketServer::WebSocketServer() {
             Module.sessionByWs.set(ws_id, sess.userId);
 
             // Log account id and discord display
-            const proceed = (accountId) => {
+                                                const proceed = (accountId) => {
                 const discordDisplay = (sess.username || sess.userId || 'unknown');
                 console.log('Client connected: account_id=' + (accountId || 'unknown') + ', discord=' + discordDisplay);
+                // Important: create native WebSocket first, then set account on it
                 _on_connect(ws_id);
+                if (accountId) {
+                    try {
+                        const len = lengthBytesUTF8(accountId) + 1;
+                        const ptr = _malloc(len);
+                        stringToUTF8(accountId, ptr, len);
+                        _set_ws_account(ws_id, ptr);
+                        _free(ptr);
+                    } catch (e) { console.log('set_ws_account failed', e); }
+                }
             };
+
+
+
             let accId = (Module.accByDiscord && Module.accByDiscord.get(sess.userId));
             if (!accId) {
                 db.get('SELECT account_id FROM discord_links WHERE discord_user_id=?', [sess.userId], function(err, row){

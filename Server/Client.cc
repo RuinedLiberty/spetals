@@ -4,6 +4,7 @@
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
+#include <Server/AccountLink.hh>
 
 #include <Helpers/UTF8.hh>
 
@@ -13,14 +14,17 @@
 #include <array>
 #include <iostream>
 
+
 constexpr std::array<uint32_t, RarityID::kNumRarities> RARITY_TO_XP = { 2, 10, 50, 200, 1000, 0 };
 
 Client::Client() : game(nullptr) {}
 
 void Client::init() {
     DEBUG_ONLY(assert(game == nullptr);)
+    std::cout << "Client::init account_id=\"" << account_id << "\"\n";
     Server::game.add_client(this);    
 }
+
 
 void Client::remove() {
     if (game == nullptr) return;
@@ -103,20 +107,31 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             player.input = reader.read<uint8_t>();
             break;
         }
-        case Serverbound::kClientSpawn: {
-            if (client->alive()) break;
+                case Serverbound::kClientSpawn: {
+                        if (client->alive()) break;
+            std::cout << "Clientbound::kClientSpawn from account=\"" << client->account_id << "\"\n";
             //check string length
             std::string name;
+
             if (client->check_invalid(validator.validate_string(MAX_NAME_LENGTH))) return;
             reader.read<std::string>(name);
             if (client->check_invalid(UTF8Parser::is_valid_utf8(name))) return;
             Simulation *simulation = &client->game->simulation;
             Entity &camera = simulation->get_ent(client->camera);
-            Entity &player = alloc_player(simulation, camera.get_team());
+                        Entity &player = alloc_player(simulation, camera.get_team());
             player_spawn(simulation, camera, player);
             player.set_name(name);
+            // Link player entity to account for server-side kill tracking
+            if (!client->account_id.empty()) {
+                std::cout << "Client: mapping player entity id=" << player.id.id << " to account=\"" << client->account_id << "\"\n";
+                AccountLink::map_player(player.id, client->account_id);
+            } else {
+                std::cout << "Client: spawn without account_id (should not happen)\n";
+            }
             break;
         }
+
+
         case Serverbound::kPetalDelete: {
             if (!client->alive()) break;
             Simulation *simulation = &client->game->simulation;

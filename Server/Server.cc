@@ -32,6 +32,12 @@ void Server::tick() {
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> tick_time = end - start;
     if (tick_time > 5ms) std::cout << "tick took " << tick_time << '\n';
+    // Heartbeat for debugging
+    static int counter = 0;
+    if ((++counter % (TPS*10)) == 0) {
+        std::cout << "Server heartbeat: running, TPS=" << TPS << "\n";
+    }
+
 }
 
 #ifndef WASM_SERVER

@@ -29,8 +29,11 @@ void render_mob(Renderer &ctx, Entity const &ent) {
         };
     }
     draw_static_mob(ent.get_mob_id(), ctx, attrs);
+    // No longer set seen_mobs client-side; server owns this state
+    /*
     if (ent.deletion_animation > 0)
         Game::seen_mobs[ent.get_mob_id()] = 1;
+    */
     /*
     #ifdef DEBUG
     ctx.set_stroke(0x80ff0000);

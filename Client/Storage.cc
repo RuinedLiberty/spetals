@@ -123,10 +123,10 @@ public:
 
 #define STORED \
     X(0, Game::nickname) \
-    X(1, Game::seen_mobs) \
-    X(2, Game::seen_petals) \
-    X(3, Input::keyboard_movement) \
-    X(4, Input::movement_helper)
+    X(1, Game::seen_petals) \
+    X(2, Input::keyboard_movement) \
+    X(3, Input::movement_helper)
+
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
 STORED
@@ -136,15 +136,8 @@ using namespace StorageProtocol;
 
 void Storage::retrieve() {
     Game::seen_petals[PetalID::kBasic] = 1;
-    {
-        uint32_t len = StorageProtocol::retrieve("mobs", 256);
-        Decoder reader(&StorageProtocol::buffer[0]);
-        while (reader.at < StorageProtocol::buffer + len) {
-            MobID::T mob_id = reader.read<uint8_t>();
-            if (mob_id >= MobID::kNumMobs) break;
-            Game::seen_mobs[mob_id] = 1;
-        }
-    }
+        // seen_mobs is now server-authoritative; do not load from local storage
+
     {
         uint32_t len = StorageProtocol::retrieve("petals", 256);
         Decoder reader(&StorageProtocol::buffer[0]);
@@ -188,12 +181,8 @@ void Storage::set() {
             if (Game::seen_petals[id]) writer.write<uint8_t>(id);
         StorageProtocol::store("petals", writer.at - writer.base);
     }
-    {
-        Encoder writer(&StorageProtocol::buffer[0]);
-        for (MobID::T id = 0; id < MobID::kNumMobs; ++id)
-            if (Game::seen_mobs[id]) writer.write<uint8_t>(id);
-        StorageProtocol::store("mobs", writer.at - writer.base);
-    }
+        // seen_mobs is now server-authoritative; do not save to local storage
+
     {
         Encoder writer(&StorageProtocol::buffer[0]);
         writer.write<std::string>(Game::nickname);
