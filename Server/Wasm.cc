@@ -9,6 +9,10 @@
 #include <unordered_map>
 
 #include <emscripten.h>
+#ifdef WASM_SERVER
+#include <Server/Account/WasmGalleryStore.hh>
+#endif
+
 
 std::unordered_map<int, WebSocket *> WS_MAP;
 
@@ -17,6 +21,8 @@ extern "C" void set_ws_account(int ws_id, const char *account_id) {
     if (it == WS_MAP.end() || !account_id) return;
     it->second->getUserData()->account_id = std::string(account_id);
 }
+
+
 
 
 
@@ -56,8 +62,29 @@ extern "C" {
     }
 }
 
+extern "C" void record_mob_kill_js(const char *account_id_c, int mob_id) {
+    EM_ASM({
+        try { Module.recordMobKill(UTF8ToString($0), $1); } catch(e) {}
+    }, account_id_c, mob_id);
+}
+
+
+
+extern "C" void wasm_gallery_mark_for(const char *account_id_c, int mob_id) {
+    if (!account_id_c) return;
+    WasmGalleryStore::record_kill(std::string(account_id_c), mob_id);
+}
+
+extern "C" void wasm_send_gallery_for(const char *account_id_c) {
+    if (!account_id_c) return;
+    Server::game.send_mob_gallery_to_account(std::string(account_id_c));
+}
+
+
+
 WebSocketServer::WebSocketServer() {
     EM_ASM((function(){
+
         const WSS = require("ws");
 
         const http = require("http");
@@ -128,12 +155,46 @@ WebSocketServer::WebSocketServer() {
                 banned INTEGER NOT NULL DEFAULT 0,\
                 ban_reason TEXT\
             )');
-            db.run('CREATE TABLE IF NOT EXISTS discord_links (\
+                        db.run('CREATE TABLE IF NOT EXISTS discord_links (\
                 account_id TEXT NOT NULL,\
                 discord_user_id TEXT NOT NULL UNIQUE,\
                 created_at INTEGER NOT NULL\
             )');
+            db.run('CREATE TABLE IF NOT EXISTS mob_kills (\
+                account_id TEXT NOT NULL,\
+                mob_id INTEGER NOT NULL,\
+                kills INTEGER NOT NULL DEFAULT 0,\
+                PRIMARY KEY (account_id, mob_id)\
+            )');
         });
+
+        // Expose helpers to persist and fetch mob gallery
+                        Module.recordMobKill = function(accountId, mobId) {
+            try {
+                db.run('INSERT INTO mob_kills (account_id, mob_id, kills) VALUES (?, ?, 1) ON CONFLICT(account_id, mob_id) DO UPDATE SET kills = kills + 1', [accountId, mobId]);
+            } catch(e) {}
+        };
+        Module.seedGalleryForAccount = function(accountId) {
+            try {
+                db.all('SELECT mob_id FROM mob_kills WHERE account_id=?', [accountId], function(err, rows){
+                    if (err) { return; }
+                    const len = lengthBytesUTF8(accountId) + 1;
+                    const ptr = _malloc(len);
+                    stringToUTF8(accountId, ptr, len);
+                    try {
+                        if (rows && rows.length) {
+                            for (const r of rows) {
+                                try { _wasm_gallery_mark_for(ptr, r.mob_id|0); } catch(e) {}
+                            }
+                        }
+                        try { _wasm_send_gallery_for(ptr); } catch(e) {}
+                    } finally { _free(ptr); }
+                });
+            } catch(e) {}
+        };
+
+
+
 
         async function exchangeCodeForToken(code, redirect_uri) {
             var params = new URLSearchParams();
@@ -318,10 +379,10 @@ WebSocketServer::WebSocketServer() {
             Module.sessionByWs.set(ws_id, sess.userId);
 
             // Log account id and discord display
-                                                const proceed = (accountId) => {
+                                                                                    const proceed = (accountId) => {
                 const discordDisplay = (sess.username || sess.userId || 'unknown');
                 console.log('Client connected: account_id=' + (accountId || 'unknown') + ', discord=' + discordDisplay);
-                // Important: create native WebSocket first, then set account on it
+                // Create native WebSocket, then set account, then seed gallery from DB and push
                 _on_connect(ws_id);
                 if (accountId) {
                     try {
@@ -330,9 +391,13 @@ WebSocketServer::WebSocketServer() {
                         stringToUTF8(accountId, ptr, len);
                         _set_ws_account(ws_id, ptr);
                         _free(ptr);
-                    } catch (e) { console.log('set_ws_account failed', e); }
+                    } catch (e) {}
+                    try { Module.seedGalleryForAccount(accountId); } catch(e) {}
                 }
             };
+
+
+
 
 
 

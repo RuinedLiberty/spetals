@@ -10,14 +10,16 @@
 #include <Server/Account/AccountLink.hh>
 #include <Server/Server.hh>
 
-
-
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
 
 #include <algorithm>
-#include <iostream>
+
+#ifdef WASM_SERVER
+extern "C" void record_mob_kill_js(const char *account_id_c, int mob_id);
+#endif
+
 
 
 static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops, float x, float y) {
@@ -71,11 +73,14 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 AuthDB::record_mob_kill(acc, (int)ent.get_mob_id());
 #else
                 WasmGalleryStore::record_kill(acc, (int)ent.get_mob_id());
+                record_mob_kill_js(acc.c_str(), (int)ent.get_mob_id());
 #endif
                 Server::game.send_mob_gallery_to_account(acc);
             }
         }
     }
+
+
 
     if (ent.has_component(kFlower) && sim->ent_alive(ent.get_parent())) {
 #ifndef WASM_SERVER
