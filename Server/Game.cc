@@ -4,10 +4,53 @@
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
+#include <Server/Account/AccountLink.hh>
+#ifndef WASM_SERVER
+#include <Server/AuthDB.hh>
+#else
+#include <Server/Account/WasmGalleryStore.hh>
+#endif
 
 #include <Shared/Binary.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
+
+#include <vector>
+#include <algorithm>
+
+static void _send_mob_gallery_for(Client *client) {
+    if (!client || client->account_id.empty()) return;
+        Writer w(Server::OUTGOING_PACKET);
+    w.write<uint8_t>(Clientbound::kMobGallery);
+    uint32_t const N = MobID::kNumMobs;
+    uint32_t bytes = (N + 7) / 8;
+    std::vector<uint8_t> bits(bytes, 0);
+#ifndef WASM_SERVER
+    {
+        std::vector<int> mob_ids;
+        if (AuthDB::get_mob_ids(client->account_id, mob_ids)) {
+            for (int id : mob_ids) {
+                if (id >= 0 && id < (int)N) bits[(uint32_t)id >> 3] |= (1u << ((uint32_t)id & 7));
+            }
+        }
+    }
+#else
+    {
+        std::vector<uint8_t> cached;
+        if (WasmGalleryStore::get_gallery_bits(client->account_id, cached)) {
+            std::fill(bits.begin(), bits.end(), 0);
+            uint32_t to_copy = std::min<uint32_t>((uint32_t)cached.size(), bytes);
+            if (to_copy > 0) {
+                std::copy_n(cached.begin(), to_copy, bits.begin());
+            }
+        }
+    }
+#endif
+
+    w.write<uint32_t>(bytes);
+    for (uint32_t i=0;i<bytes;++i) w.write<uint8_t>(bits[i]);
+    client->send_packet(w.packet, w.at - w.packet);
+} 
 
 static void _update_client(Simulation *sim, Client *client) {
     if (client == nullptr) return;
@@ -102,8 +145,13 @@ void GameInstance::add_client(Client *client) {
         ent.set_inventory(0, PetalID::kUniqueBasic);
     for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i)
         PetalTracker::add_petal(&simulation, ent.get_inventory(i));
-    client->camera = ent.id;
+        client->camera = ent.id;
     client->seen_arena = 0;
+
+        if (!client->account_id.empty()) {
+        AccountLink::map_camera(client->camera, client->account_id);
+        _send_mob_gallery_for(client);
+    }
 }
 
 void GameInstance::remove_client(Client *client) {
@@ -117,7 +165,16 @@ void GameInstance::remove_client(Client *client) {
             simulation.request_delete(c.get_player());
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             PetalTracker::remove_petal(&simulation, c.get_inventory(i));
+        AccountLink::unmap_camera(client->camera);
         simulation.request_delete(client->camera);
     }
     client->game = nullptr;
+}
+
+void GameInstance::send_mob_gallery_to_account(const std::string &account_id) {
+    for (Client *c : clients) {
+        if (c && c->account_id == account_id) {
+            _send_mob_gallery_for(c);
+        }
+    }
 }

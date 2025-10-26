@@ -4,6 +4,8 @@
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
+#include <Server/Account/AccountLink.hh>
+
 
 #include <Helpers/UTF8.hh>
 
@@ -13,6 +15,7 @@
 #include <array>
 #include <iostream>
 
+
 constexpr std::array<uint32_t, RarityID::kNumRarities> RARITY_TO_XP = { 2, 10, 50, 200, 1000, 0 };
 
 Client::Client() : game(nullptr) {}
@@ -21,6 +24,8 @@ void Client::init() {
     DEBUG_ONLY(assert(game == nullptr);)
     Server::game.add_client(this);    
 }
+
+
 
 void Client::remove() {
     if (game == nullptr) return;
@@ -103,20 +108,29 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             player.input = reader.read<uint8_t>();
             break;
         }
-        case Serverbound::kClientSpawn: {
-            if (client->alive()) break;
+                case Serverbound::kClientSpawn: {
+                                    if (client->alive()) break;
             //check string length
+
             std::string name;
+
             if (client->check_invalid(validator.validate_string(MAX_NAME_LENGTH))) return;
             reader.read<std::string>(name);
             if (client->check_invalid(UTF8Parser::is_valid_utf8(name))) return;
             Simulation *simulation = &client->game->simulation;
             Entity &camera = simulation->get_ent(client->camera);
-            Entity &player = alloc_player(simulation, camera.get_team());
+                        Entity &player = alloc_player(simulation, camera.get_team());
             player_spawn(simulation, camera, player);
             player.set_name(name);
+                        // Link player entity to account for server-side kill tracking
+            if (!client->account_id.empty()) {
+                AccountLink::map_player(player.id, client->account_id);
+            }
+
             break;
         }
+
+
         case Serverbound::kPetalDelete: {
             if (!client->alive()) break;
             Simulation *simulation = &client->game->simulation;
@@ -157,7 +171,6 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
 }
 
 void Client::on_disconnect(WebSocket *ws, int code, std::string_view message) {
-    std::printf("disconnect: [%d]\n", code);
 #ifndef WASM_SERVER
     PerSocketData *psd = ws->getUserData();
     Client *client = (psd ? psd->client : nullptr);
@@ -165,8 +178,16 @@ void Client::on_disconnect(WebSocket *ws, int code, std::string_view message) {
     Client *client = ws->getUserData();
 #endif
     if (client == nullptr) return;
+    #ifndef WASM_SERVER
+    // Log detailed disconnect info if available (native server)
+    if (!client->account_id.empty()) {
+        std::cout << "Client disconnected: account_id=" << client->account_id << ", code=" << code << "\n";
+    }
+#endif
+
     client->remove();
 }
+
 
 
 bool Client::check_invalid(bool valid) {

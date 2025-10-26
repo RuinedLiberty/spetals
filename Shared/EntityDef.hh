@@ -133,7 +133,9 @@ SINGLE(Name, nametag_visible, uint8_t)
     SINGLE(deleted_petals, circ_arr_t, ={}) \
     SINGLE(projectile_decay_active, uint8_t, =0) \
     SINGLE(projectile_init_speed, float, =0) \
-    SINGLE(projectile_target_ratio, float, =0)
+        SINGLE(projectile_target_ratio, float, =0) \
+    MULTIPLE(damagers, EntityID, 16, =NULL_ENTITY) \
+    SINGLE(damager_count, uint8_t, =0)
 #else
 #define PER_EXTRA_FIELD \
     SINGLE(last_damaged_time, double, =0) \
@@ -146,6 +148,7 @@ SINGLE(Name, nametag_visible, uint8_t)
     SINGLE(animation, float, =0) \
     SINGLE(damage_flash, float, =0)
 #endif
+
 
 class EntityID {
 public:

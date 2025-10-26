@@ -30,8 +30,10 @@ void Server::tick() {
     auto start = std::chrono::steady_clock::now();
     Server::game.tick();
     auto end = std::chrono::steady_clock::now();
-    std::chrono::duration<double, std::milli> tick_time = end - start;
+        std::chrono::duration<double, std::milli> tick_time = end - start;
     if (tick_time > 5ms) std::cout << "tick took " << tick_time << '\n';
+
+
 }
 
 #ifndef WASM_SERVER

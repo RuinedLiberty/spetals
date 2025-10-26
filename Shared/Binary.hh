@@ -7,9 +7,13 @@
 #include <vector>
 
 
+
+
 enum Clientbound {
-    kClientUpdate
+    kClientUpdate,
+    kMobGallery // initial or full mob gallery payload for the account
 };
+
 
 enum Serverbound {
     kVerify,

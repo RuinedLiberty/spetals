@@ -9,15 +9,30 @@
 #include <unordered_map>
 
 #include <emscripten.h>
+#ifdef WASM_SERVER
+#include <Server/Account/WasmGalleryStore.hh>
+#endif
+
 
 std::unordered_map<int, WebSocket *> WS_MAP;
+
+extern "C" void set_ws_account(int ws_id, const char *account_id) {
+    auto it = WS_MAP.find(ws_id);
+    if (it == WS_MAP.end() || !account_id) return;
+    it->second->getUserData()->account_id = std::string(account_id);
+}
+
+
+
+
+
 
 size_t const MAX_BUFFER_LEN = 1024;
 static uint8_t INCOMING_BUFFER[MAX_BUFFER_LEN] = {0};
 
 extern "C" {
     void on_connect(int ws_id) {
-        std::printf("client connect: [%d]\n", ws_id);
+        
         WebSocket *ws = new WebSocket(ws_id);
         WS_MAP.insert({ws_id, ws});
     }
@@ -25,10 +40,10 @@ extern "C" {
     void on_disconnect(int ws_id, int reason) {
         auto iter = WS_MAP.find(ws_id);
         if (iter == WS_MAP.end()) {
-            std::printf("unknown ws disconnect: [%d]", ws_id);
+            
             return;
         }
-        std::printf("client disconnect: [%d]\n", ws_id);
+        
         Client::on_disconnect(iter->second, reason, {});
         WS_MAP.erase(ws_id);
         delete iter->second;
@@ -47,8 +62,29 @@ extern "C" {
     }
 }
 
+extern "C" void record_mob_kill_js(const char *account_id_c, int mob_id) {
+    EM_ASM({
+        try { Module.recordMobKill(UTF8ToString($0), $1); } catch(e) {}
+    }, account_id_c, mob_id);
+}
+
+
+
+extern "C" void wasm_gallery_mark_for(const char *account_id_c, int mob_id) {
+    if (!account_id_c) return;
+    WasmGalleryStore::record_kill(std::string(account_id_c), mob_id);
+}
+
+extern "C" void wasm_send_gallery_for(const char *account_id_c) {
+    if (!account_id_c) return;
+    Server::game.send_mob_gallery_to_account(std::string(account_id_c));
+}
+
+
+
 WebSocketServer::WebSocketServer() {
     EM_ASM((function(){
+
         const WSS = require("ws");
 
         const http = require("http");
@@ -119,12 +155,46 @@ WebSocketServer::WebSocketServer() {
                 banned INTEGER NOT NULL DEFAULT 0,\
                 ban_reason TEXT\
             )');
-            db.run('CREATE TABLE IF NOT EXISTS discord_links (\
+                        db.run('CREATE TABLE IF NOT EXISTS discord_links (\
                 account_id TEXT NOT NULL,\
                 discord_user_id TEXT NOT NULL UNIQUE,\
                 created_at INTEGER NOT NULL\
             )');
+            db.run('CREATE TABLE IF NOT EXISTS mob_kills (\
+                account_id TEXT NOT NULL,\
+                mob_id INTEGER NOT NULL,\
+                kills INTEGER NOT NULL DEFAULT 0,\
+                PRIMARY KEY (account_id, mob_id)\
+            )');
         });
+
+        // Expose helpers to persist and fetch mob gallery
+                        Module.recordMobKill = function(accountId, mobId) {
+            try {
+                db.run('INSERT INTO mob_kills (account_id, mob_id, kills) VALUES (?, ?, 1) ON CONFLICT(account_id, mob_id) DO UPDATE SET kills = kills + 1', [accountId, mobId]);
+            } catch(e) {}
+        };
+        Module.seedGalleryForAccount = function(accountId) {
+            try {
+                db.all('SELECT mob_id FROM mob_kills WHERE account_id=?', [accountId], function(err, rows){
+                    if (err) { return; }
+                    const len = lengthBytesUTF8(accountId) + 1;
+                    const ptr = _malloc(len);
+                    stringToUTF8(accountId, ptr, len);
+                    try {
+                        if (rows && rows.length) {
+                            for (const r of rows) {
+                                try { _wasm_gallery_mark_for(ptr, r.mob_id|0); } catch(e) {}
+                            }
+                        }
+                        try { _wasm_send_gallery_for(ptr); } catch(e) {}
+                    } finally { _free(ptr); }
+                });
+            } catch(e) {}
+        };
+
+
+
 
         async function exchangeCodeForToken(code, redirect_uri) {
             var params = new URLSearchParams();
@@ -308,12 +378,30 @@ WebSocketServer::WebSocketServer() {
             Module.userActiveWs.set(sess.userId, ws_id);
             Module.sessionByWs.set(ws_id, sess.userId);
 
-            // Log account id and discord display
-            const proceed = (accountId) => {
+                        // Log account id and discord display
+            let accountIdForConn = null;
+                                                                                    const proceed = (accountId) => { accountIdForConn = accountId || null;
                 const discordDisplay = (sess.username || sess.userId || 'unknown');
                 console.log('Client connected: account_id=' + (accountId || 'unknown') + ', discord=' + discordDisplay);
+                // Create native WebSocket, then set account, then seed gallery from DB and push
                 _on_connect(ws_id);
+                if (accountId) {
+                    try {
+                        const len = lengthBytesUTF8(accountId) + 1;
+                        const ptr = _malloc(len);
+                        stringToUTF8(accountId, ptr, len);
+                        _set_ws_account(ws_id, ptr);
+                        _free(ptr);
+                    } catch (e) {}
+                    try { Module.seedGalleryForAccount(accountId); } catch(e) {}
+                }
             };
+
+
+
+
+
+
             let accId = (Module.accByDiscord && Module.accByDiscord.get(sess.userId));
             if (!accId) {
                 db.get('SELECT account_id FROM discord_links WHERE discord_user_id=?', [sess.userId], function(err, row){
@@ -342,6 +430,7 @@ WebSocketServer::WebSocketServer() {
                 if (uid && Module.userActiveWs.get(uid) === ws_id)
                     Module.userActiveWs.delete(uid);
                 Module.sessionByWs.delete(ws_id);
+                console.log('Client disconnected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + (sess.username || sess.userId || 'unknown') + ', code=' + reason);
                 _on_disconnect(ws_id, reason);
                 delete Module.ws_connections[ws_id];
             });

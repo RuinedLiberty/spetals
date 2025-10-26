@@ -86,7 +86,21 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     }
     defender.last_damaged_by = attacker.base_entity;
 
+    // Track damagers for mob gallery (anyone who dealt damage)
+    if (defender.has_component(kMob)) {
+        EntityID base = attacker.base_entity;
+        // Check if already present
+        bool present = false;
+        for (uint8_t i = 0; i < defender.damager_count; ++i) {
+            if (EntityID::equal_to(defender.damagers[i], base)) { present = true; break; }
+        }
+        if (!present && defender.damager_count < 16) {
+            defender.damagers[defender.damager_count++] = base;
+        }
+    }
+
     if (type == DamageType::kContact && defender.poison_ticks < attacker.poison_damage.time * TPS) {
+
         defender.poison_ticks = attacker.poison_damage.time * TPS;
         defender.poison_inflicted = attacker.poison_damage.damage / TPS;
         defender.poison_dealer = defender.last_damaged_by;

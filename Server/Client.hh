@@ -13,7 +13,6 @@ class WebSocket;
 #include <App.h>
 #include <Server/PerSocketData.hh>
 class Client;
-// Note: WebSocket user data is PerSocketData
 typedef uWS::WebSocket<false, true, PerSocketData> WebSocket;
 #endif
 
@@ -27,7 +26,6 @@ public:
     WebSocket *ws;
     uint8_t verified = 0;
     uint8_t seen_arena = 0;
-    // Server-only opaque account id (UUID v4 as 36-char string)
     std::string account_id;
 
     Client();
@@ -37,9 +35,6 @@ public:
     uint8_t alive();
 
     void send_packet(uint8_t const *, size_t);
-    //takes in a bool expr
-    //if true, packet reading should be terminated
-    //optionally, the client canalso be disconnected
     bool check_invalid(bool);
     static void on_message(WebSocket *, std::string_view, uint64_t);
     static void on_disconnect(WebSocket *, int, std::string_view);

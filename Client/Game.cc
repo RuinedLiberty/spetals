@@ -98,8 +98,10 @@ using namespace Game;
 
 void Game::init() {
     Input::is_mobile = check_mobile();
-    Storage::retrieve();
+            Storage::retrieve();
     reset();
+
+
     // Prime login state immediately
     update_logged_in_as();
     title_ui_window.add_child(

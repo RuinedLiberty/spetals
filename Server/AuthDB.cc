@@ -6,6 +6,7 @@
 #include <ctime>
 #include <iostream>
 #include <cstdlib>
+#include <vector>
 
 namespace {
     sqlite3 *g_db = nullptr;
@@ -52,6 +53,14 @@ bool init(const std::string &db_path) {
         "  FOREIGN KEY(account_id) REFERENCES accounts(id)\n"
         ");"
         "CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id);"
+        // New: mob_kills table to track which mobs an account has killed
+        "CREATE TABLE IF NOT EXISTS mob_kills (\n"
+        "  account_id TEXT NOT NULL,\n"
+        "  mob_id INTEGER NOT NULL,\n"
+        "  kills INTEGER NOT NULL DEFAULT 0,\n"
+        "  PRIMARY KEY (account_id, mob_id),\n"
+        "  FOREIGN KEY(account_id) REFERENCES accounts(id)\n"
+        ");"
     ;
     char *errmsg = nullptr;
     if (sqlite3_exec(g_db, schema, nullptr, nullptr, &errmsg) != SQLITE_OK) {
@@ -199,4 +208,51 @@ bool get_discord_username(const std::string &account_id, std::string &username_o
     return false;
 }
 
+bool record_mob_kill(const std::string &account_id, int mob_id) {
+    if (!g_db) { if (!init("") ) return false; }
+    if (!is_valid_uuid(account_id)) return false;
+    std::cout << "AuthDB: record_mob_kill account_id=" << account_id << ", mob_id=" << mob_id << "\n";
+    sqlite3_stmt *stmt = nullptr;
+    const char *sql =
+        "INSERT INTO mob_kills (account_id, mob_id, kills) VALUES (?1, ?2, 1)\n"
+        "ON CONFLICT(account_id, mob_id) DO UPDATE SET kills = kills + 1";
+    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "AuthDB: failed to prepare record_mob_kill: " << sqlite3_errmsg(g_db) << "\n";
+        return false;
+    }
+    sqlite3_bind_text(stmt, 1, account_id.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 2, mob_id);
+    bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+    if (!ok) {
+        std::cerr << "AuthDB: record_mob_kill step failed: " << sqlite3_errmsg(g_db) << "\n";
+    }
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+
+bool get_mob_ids(const std::string &account_id, std::vector<int> &mob_ids_out) {
+    mob_ids_out.clear();
+    if (!g_db) { if (!init("") ) return false; }
+    if (!is_valid_uuid(account_id)) return false;
+    const char *sql = "SELECT mob_id FROM mob_kills WHERE account_id=?1";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "AuthDB: get_mob_ids prepare failed: " << sqlite3_errmsg(g_db) << "\n";
+        return false;
+    }
+    sqlite3_bind_text(stmt, 1, account_id.c_str(), -1, SQLITE_STATIC);
+    int rows = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        int mob_id = sqlite3_column_int(stmt, 0);
+        mob_ids_out.push_back(mob_id);
+        rows++;
+    }
+    sqlite3_finalize(stmt);
+    std::cout << "AuthDB: get_mob_ids account_id=" << account_id << " -> count=" << rows << "\n";
+    return true;
+}
+
+
 } // namespace AuthDB
+

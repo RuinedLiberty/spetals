@@ -28,9 +28,8 @@ void render_mob(Renderer &ctx, Entity const &ent) {
             .color = ent.get_color()
         };
     }
-    draw_static_mob(ent.get_mob_id(), ctx, attrs);
-    if (ent.deletion_animation > 0)
-        Game::seen_mobs[ent.get_mob_id()] = 1;
+        draw_static_mob(ent.get_mob_id(), ctx, attrs);
+
     /*
     #ifdef DEBUG
     ctx.set_stroke(0x80ff0000);

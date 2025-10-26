@@ -34,10 +34,24 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             simulation.arena_info.read(&reader, reader.read<uint8_t>());
             break;
         }
+                case Clientbound::kMobGallery: {
+            uint32_t bytes = reader.read<uint32_t>();
+            for (uint32_t i=0;i<bytes;++i) {
+                uint8_t b = reader.read<uint8_t>();
+                for (uint32_t bit=0; bit<8; ++bit) {
+                    uint32_t idx = i*8 + bit;
+                    if (idx >= MobID::kNumMobs) break;
+                    Game::seen_mobs[idx] = ((b >> bit) & 1) ? 1 : 0;
+                }
+            }
+            break;
+        }
+
         default:
             break;
     }
 }
+
 
 void Game::send_inputs() {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
