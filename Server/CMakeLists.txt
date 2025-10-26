@@ -30,8 +30,9 @@ set(SOURCES
     Simulation.cc
     Spawn.cc
         TeamManager.cc
-    AccountLink.cc
-    GalleryStore.cc
+        Account/AccountLink.cc
+    Account/WasmGalleryStore.cc
+
     ../Helpers/Math.cc
 
     ../Helpers/UTF8.cc

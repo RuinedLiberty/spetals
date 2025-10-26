@@ -98,10 +98,9 @@ using namespace Game;
 
 void Game::init() {
     Input::is_mobile = check_mobile();
-        Storage::retrieve();
-    // Initialize seen_mobs empty; server will populate after auth
-    for (uint32_t i=0;i<MobID::kNumMobs;++i) seen_mobs[i] = 0;
+            Storage::retrieve();
     reset();
+
 
     // Prime login state immediately
     update_logged_in_as();

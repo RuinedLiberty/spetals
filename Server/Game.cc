@@ -4,21 +4,22 @@
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
-#include <Server/AuthDB.hh>
-#include <Server/AccountLink.hh>
+#include <Server/Account/AccountLink.hh>
 #ifndef WASM_SERVER
 #include <Server/AuthDB.hh>
 #else
-#include <Server/GalleryStore.hh>
+#include <Server/Account/WasmGalleryStore.hh>
 #endif
+
 
 #include <Shared/Binary.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
 
-#include <iostream>
+
 #include <vector>
 #include <algorithm>
+
 
 
 
@@ -35,31 +36,25 @@ static void _send_mob_gallery_for(Client *client) {
     {
         std::vector<int> mob_ids;
         if (!AuthDB::get_mob_ids(client->account_id, mob_ids)) {
-            std::cout << "Game: failed to get mob_ids for account=\"" << client->account_id << "\"\n";
             return;
         }
         for (int id : mob_ids) {
             if (id >= 0 && id < (int)N) bits[(uint32_t)id >> 3] |= (1u << ((uint32_t)id & 7));
         }
-        std::cout << "Game: sending MobGallery (native) to account=\"" << client->account_id << "\" count=" << mob_ids.size() << "\n";
     }
 #else
     {
         std::vector<uint8_t> cached;
-        if (GalleryStore::get_gallery_bits(client->account_id, cached)) {
-            // Copy as much as we need from cached into bits, even if cached is larger
+        if (WasmGalleryStore::get_gallery_bits(client->account_id, cached)) {
             std::fill(bits.begin(), bits.end(), 0);
             uint32_t to_copy = std::min<uint32_t>((uint32_t)cached.size(), bytes);
             if (to_copy > 0) {
                 std::copy_n(cached.begin(), to_copy, bits.begin());
             }
-            size_t cnt = 0; for (uint32_t i=0;i<N;++i) if (bits[i>>3] & (1u<<(i&7))) ++cnt;
-            std::cout << "Game: sending MobGallery (wasm) to account=\"" << client->account_id << "\" count=" << cnt << " (bytes=" << bytes << ", cached=" << cached.size() << ")\n";
-        } else {
-            std::cout << "Game: sending MobGallery (wasm) empty for account=\"" << client->account_id << "\"\n";
         }
     }
 #endif
+
 
     // send length then bytes
     w.write<uint32_t>(bytes);
@@ -165,14 +160,12 @@ void GameInstance::add_client(Client *client) {
         client->camera = ent.id;
     client->seen_arena = 0;
 
-    // Link camera to account id and push initial mob gallery if we have it
+        // Link camera to account id and push initial mob gallery if we have it
     if (!client->account_id.empty()) {
-        std::cout << "Game: mapping camera entity id=" << client->camera.id << " to account=\"" << client->account_id << "\"\n";
         AccountLink::map_camera(client->camera, client->account_id);
         _send_mob_gallery_for(client);
-    } else {
-        std::cout << "Game: no account_id on client when adding camera (should not happen)\n";
     }
+
 
 }
 

@@ -5,10 +5,11 @@
 #ifndef WASM_SERVER
 #include <Server/AuthDB.hh>
 #else
-#include <Server/GalleryStore.hh>
+#include <Server/Account/WasmGalleryStore.hh>
 #endif
-#include <Server/AccountLink.hh>
+#include <Server/Account/AccountLink.hh>
 #include <Server/Server.hh>
+
 
 
 #include <Shared/Entity.hh>
@@ -59,30 +60,23 @@ static void _add_score(Simulation *sim, EntityID const killer_id, Entity const &
 void entity_on_death(Simulation *sim, Entity const &ent) {
     //don't do on_death for any despawned entity
     uint8_t natural_despawn = BitMath::at(ent.flags, EntityFlags::kIsDespawning) && ent.despawn_tick == 0;
-    if (ent.score_reward > 0 && sim->ent_exists(ent.last_damaged_by) && !natural_despawn) {
+        if (ent.score_reward > 0 && sim->ent_exists(ent.last_damaged_by) && !natural_despawn) {
         EntityID killer_id = sim->get_ent(ent.last_damaged_by).base_entity;
         _add_score(sim, killer_id, ent);
         // If this was a mob death, persist kill to the killer's account and push update
         if (ent.has_component(kMob)) {
             std::string acc = AccountLink::get_account_for_entity(killer_id);
             if (!acc.empty()) {
-                std::cout << "Death: mob=\"" << (int)ent.get_mob_id() << "\" killed by account=\"" << acc << "\"\n";
 #ifndef WASM_SERVER
-                if (!AuthDB::record_mob_kill(acc, (int)ent.get_mob_id())) {
-                    std::cerr << "Death: record_mob_kill failed for account=\"" << acc << "\"\n";
-                } else {
-                    std::cout << "Death: record_mob_kill success for account=\"" << acc << "\"\n";
-                }
+                AuthDB::record_mob_kill(acc, (int)ent.get_mob_id());
 #else
-                GalleryStore::record_kill(acc, (int)ent.get_mob_id());
+                WasmGalleryStore::record_kill(acc, (int)ent.get_mob_id());
 #endif
                 Server::game.send_mob_gallery_to_account(acc);
-            } else {
-                std::cout << "Death: mob killed but no account mapping for killer entity id=" << killer_id.id << "\n";
             }
         }
-
     }
+
     if (ent.has_component(kFlower) && sim->ent_alive(ent.get_parent())) {
 #ifndef WASM_SERVER
         // Unmap this player entity from account link on death

@@ -12,16 +12,12 @@
 
 std::unordered_map<int, WebSocket *> WS_MAP;
 
-extern "C" {
-    void set_ws_account(int ws_id, const char *account_id);
-}
-
 extern "C" void set_ws_account(int ws_id, const char *account_id) {
     auto it = WS_MAP.find(ws_id);
     if (it == WS_MAP.end() || !account_id) return;
     it->second->getUserData()->account_id = std::string(account_id);
-    std::cout << "WASM: set_ws_account ws_id=" << ws_id << " account_id=\"" << it->second->getUserData()->account_id << "\"\n";
 }
+
 
 
 
