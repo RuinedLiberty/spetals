@@ -11,39 +11,27 @@
 #include <Server/Account/WasmGalleryStore.hh>
 #endif
 
-
 #include <Shared/Binary.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
 
-
 #include <vector>
 #include <algorithm>
-#include <iostream>
-
-
-
-
-
 
 static void _send_mob_gallery_for(Client *client) {
     if (!client || client->account_id.empty()) return;
         Writer w(Server::OUTGOING_PACKET);
     w.write<uint8_t>(Clientbound::kMobGallery);
-    // Write as bitmap for compactness: kNumMobs bits
     uint32_t const N = MobID::kNumMobs;
     uint32_t bytes = (N + 7) / 8;
     std::vector<uint8_t> bits(bytes, 0);
 #ifndef WASM_SERVER
     {
         std::vector<int> mob_ids;
-        if (!AuthDB::get_mob_ids(client->account_id, mob_ids)) {
-            std::cout << "SendGallery(native): no rows for account=" << client->account_id << "\n";
-        } else {
+        if (AuthDB::get_mob_ids(client->account_id, mob_ids)) {
             for (int id : mob_ids) {
                 if (id >= 0 && id < (int)N) bits[(uint32_t)id >> 3] |= (1u << ((uint32_t)id & 7));
             }
-            std::cout << "SendGallery(native): account=" << client->account_id << " rows=" << mob_ids.size() << "\n";
         }
     }
 #else
@@ -55,22 +43,14 @@ static void _send_mob_gallery_for(Client *client) {
             if (to_copy > 0) {
                 std::copy_n(cached.begin(), to_copy, bits.begin());
             }
-            size_t cnt = 0; for (uint32_t i=0;i<N;++i) if (bits[i>>3] & (1u<<(i&7))) ++cnt;
-            std::cout << "SendGallery(wasm): account=" << client->account_id << " cachedBytes=" << cached.size() << " countBits=" << cnt << "\n";
-        } else {
-            std::cout << "SendGallery(wasm): account=" << client->account_id << " cachedBytes=0 countBits=0\n";
         }
     }
 #endif
 
-    // send length then bytes
     w.write<uint32_t>(bytes);
     for (uint32_t i=0;i<bytes;++i) w.write<uint8_t>(bits[i]);
     client->send_packet(w.packet, w.at - w.packet);
 } 
- 
-
-
 
 static void _update_client(Simulation *sim, Client *client) {
     if (client == nullptr) return;
@@ -168,17 +148,10 @@ void GameInstance::add_client(Client *client) {
         client->camera = ent.id;
     client->seen_arena = 0;
 
-            // Link camera to account id and push initial mob gallery if we have it
-    if (!client->account_id.empty()) {
-        std::cout << "AddClient: map camera id=" << client->camera.id << " to account=" << client->account_id << "\n";
+        if (!client->account_id.empty()) {
         AccountLink::map_camera(client->camera, client->account_id);
         _send_mob_gallery_for(client);
-    } else {
-        std::cout << "AddClient: missing account_id, no gallery\n";
     }
-
-
-
 }
 
 void GameInstance::remove_client(Client *client) {
@@ -192,7 +165,6 @@ void GameInstance::remove_client(Client *client) {
             simulation.request_delete(c.get_player());
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             PetalTracker::remove_petal(&simulation, c.get_inventory(i));
-        // Unmap camera
         AccountLink::unmap_camera(client->camera);
         simulation.request_delete(client->camera);
     }

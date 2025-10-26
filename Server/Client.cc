@@ -4,7 +4,8 @@
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
-#include <Server/AccountLink.hh>
+#include <Server/Account/AccountLink.hh>
+
 
 #include <Helpers/UTF8.hh>
 
