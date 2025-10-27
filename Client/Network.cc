@@ -10,7 +10,7 @@ using namespace Game;
 
 void Game::on_message(uint8_t *ptr, uint32_t len) {
     Reader reader(ptr);
-    switch(reader.read<uint8_t>()) {
+        switch(reader.read<uint8_t>()) {
         case Clientbound::kClientUpdate: {
             simulation_ready = 1;
             camera_id = reader.read<EntityID>();
@@ -34,7 +34,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             simulation.arena_info.read(&reader, reader.read<uint8_t>());
             break;
         }
-                case Clientbound::kMobGallery: {
+        case Clientbound::kMobGallery: {
             uint32_t bytes = reader.read<uint32_t>();
             for (uint32_t i=0;i<bytes;++i) {
                 uint8_t b = reader.read<uint8_t>();
@@ -44,6 +44,20 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     Game::seen_mobs[idx] = ((b >> bit) & 1) ? 1 : 0;
                 }
             }
+            break;
+        }
+        case Clientbound::kPetalGallery: {
+            uint32_t bytes = reader.read<uint32_t>();
+            for (uint32_t i=0;i<bytes;++i) {
+                uint8_t b = reader.read<uint8_t>();
+                for (uint32_t bit=0; bit<8; ++bit) {
+                    uint32_t idx = i*8 + bit;
+                    if (idx >= PetalID::kNumPetals) break;
+                    Game::seen_petals[idx] = ((b >> bit) & 1) ? 1 : 0;
+                }
+            }
+            // Ensure basic is always marked seen
+            Game::seen_petals[PetalID::kBasic] = 1;
             break;
         }
 

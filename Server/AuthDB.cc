@@ -27,7 +27,7 @@ bool init(const std::string &db_path) {
         std::cerr << "SQLite open failed: " << sqlite3_errmsg(g_db) << "\n";
         return false;
     }
-    const char *schema =
+        const char *schema =
         "PRAGMA journal_mode=WAL;"
         "CREATE TABLE IF NOT EXISTS accounts (\n"
         "  id TEXT PRIMARY KEY,\n"
@@ -59,6 +59,14 @@ bool init(const std::string &db_path) {
         "  mob_id INTEGER NOT NULL,\n"
         "  kills INTEGER NOT NULL DEFAULT 0,\n"
         "  PRIMARY KEY (account_id, mob_id),\n"
+        "  FOREIGN KEY(account_id) REFERENCES accounts(id)\n"
+        ");"
+        // New: petal_obtained table to track which petals an account has obtained
+        "CREATE TABLE IF NOT EXISTS petal_obtained (\n"
+        "  account_id TEXT NOT NULL,\n"
+        "  petal_id INTEGER NOT NULL,\n"
+        "  obtained INTEGER NOT NULL DEFAULT 1,\n"
+        "  PRIMARY KEY (account_id, petal_id),\n"
         "  FOREIGN KEY(account_id) REFERENCES accounts(id)\n"
         ");"
     ;
@@ -254,5 +262,45 @@ bool get_mob_ids(const std::string &account_id, std::vector<int> &mob_ids_out) {
 }
 
 
+
+bool record_petal_obtained(const std::string &account_id, int petal_id) {
+    if (!g_db) { if (!init("") ) return false; }
+    if (!is_valid_uuid(account_id)) return false;
+    if (petal_id < 0) return false;
+    sqlite3_stmt *stmt = nullptr;
+    const char *sql =
+        "INSERT INTO petal_obtained (account_id, petal_id, obtained) VALUES (?1, ?2, 1)\n"
+        "ON CONFLICT(account_id, petal_id) DO NOTHING";
+    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "AuthDB: failed to prepare record_petal_obtained: " << sqlite3_errmsg(g_db) << "\n";
+        return false;
+    }
+    sqlite3_bind_text(stmt, 1, account_id.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 2, petal_id);
+    bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool get_petal_ids(const std::string &account_id, std::vector<int> &petal_ids_out) {
+    petal_ids_out.clear();
+    if (!g_db) { if (!init("") ) return false; }
+    if (!is_valid_uuid(account_id)) return false;
+    const char *sql = "SELECT petal_id FROM petal_obtained WHERE account_id=?1";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "AuthDB: get_petal_ids prepare failed: " << sqlite3_errmsg(g_db) << "\n";
+        return false;
+    }
+    sqlite3_bind_text(stmt, 1, account_id.c_str(), -1, SQLITE_STATIC);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        int petal_id = sqlite3_column_int(stmt, 0);
+        petal_ids_out.push_back(petal_id);
+    }
+    sqlite3_finalize(stmt);
+    return true;
+}
+
 } // namespace AuthDB
+
 

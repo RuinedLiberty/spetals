@@ -123,9 +123,9 @@ public:
 
 #define STORED \
     X(0, Game::nickname) \
-    X(1, Game::seen_petals) \
-    X(2, Input::keyboard_movement) \
-    X(3, Input::movement_helper)
+    X(1, Input::keyboard_movement) \
+    X(2, Input::movement_helper)
+
 
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
@@ -136,17 +136,8 @@ using namespace StorageProtocol;
 
 void Storage::retrieve() {
     Game::seen_petals[PetalID::kBasic] = 1;
-        // seen_mobs is now server-authoritative; do not load from local storage
+    // Petal and mob galleries are server-authoritative; do not load from local storage
 
-    {
-        uint32_t len = StorageProtocol::retrieve("petals", 256);
-        Decoder reader(&StorageProtocol::buffer[0]);
-        while (reader.at < StorageProtocol::buffer + len) {
-            PetalID::T petal_id = reader.read<uint8_t>();
-            if (petal_id >= PetalID::kNumPetals || petal_id == PetalID::kNone) break;
-            Game::seen_petals[petal_id] = 1;
-        }
-    }
     {
         uint32_t len = StorageProtocol::retrieve("settings", 1);
         if (len > 0) {
@@ -156,6 +147,7 @@ void Storage::retrieve() {
             Input::keyboard_movement = BitMath::at(opts, 1);
         }
     }
+
     {
         uint32_t len = StorageProtocol::retrieve("nickname", sizeof(uint32_t) * MAX_NAME_LENGTH + 4);
         if (len > 0 && len <= sizeof(uint32_t) * MAX_NAME_LENGTH + 4) {
@@ -173,21 +165,16 @@ void Storage::set() {
     #define X(ct, name) checker_##ct.cmp(name);
     STORED
     #undef X
-    if (should_update == 0) return;
+        if (should_update == 0) return;
     should_update = 0;
-    {
-        Encoder writer(&StorageProtocol::buffer[0]);
-        for (PetalID::T id = PetalID::kBasic; id < PetalID::kNumPetals; ++id)
-            if (Game::seen_petals[id]) writer.write<uint8_t>(id);
-        StorageProtocol::store("petals", writer.at - writer.base);
-    }
-        // seen_mobs is now server-authoritative; do not save to local storage
+    // Petal and mob galleries are server-authoritative; do not save to local storage
 
     {
         Encoder writer(&StorageProtocol::buffer[0]);
         writer.write<std::string>(Game::nickname);
         StorageProtocol::store("nickname", writer.at - writer.base);
     }
+
     {
         Encoder writer(&StorageProtocol::buffer[0]);
         writer.write<uint8_t>(

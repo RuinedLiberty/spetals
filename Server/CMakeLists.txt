@@ -32,6 +32,8 @@ set(SOURCES
         TeamManager.cc
         Account/AccountLink.cc
     Account/WasmGalleryStore.cc
+    Account/WasmPetalGalleryStore.cc
+
 
     ../Helpers/Math.cc
 
@@ -78,7 +80,8 @@ if(WASM_SERVER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWASM_SERVER=1")
     # IMPORTANT: Do NOT enable closure/minification when using large EM_ASM blocks with Node code
     # It mangles property names like sqlite3.verbose at runtime. Keep readable JS.
-                                        add_link_options(-sEXIT_RUNTIME=0 -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message,_set_ws_account,_wasm_gallery_mark_for,_wasm_send_gallery_for,_malloc,_free -sEXPORTED_RUNTIME_METHODS=lengthBytesUTF8,stringToUTF8 -sENVIRONMENT=node)
+                                                                                add_link_options(-sEXIT_RUNTIME=0 -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message,_set_ws_account,_wasm_gallery_mark_for,_wasm_send_gallery_for,_wasm_petal_gallery_mark_for,_wasm_send_petal_gallery_for,_malloc,_free -sEXPORTED_RUNTIME_METHODS=lengthBytesUTF8,stringToUTF8 -sENVIRONMENT=node)
+
 
 
 

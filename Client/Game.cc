@@ -102,9 +102,14 @@ void Game::init() {
     reset();
 
 
-    // Prime login state immediately
+        // Prime login state immediately
     update_logged_in_as();
+    // Clear galleries until server seeds them (avoid stale local data when not logged in)
+    for (PetalID::T i = 0; i < PetalID::kNumPetals; ++i) Game::seen_petals[i] = 0;
+    for (MobID::T i = 0; i < MobID::kNumMobs; ++i) Game::seen_mobs[i] = 0;
+    Game::seen_petals[PetalID::kBasic] = 1;
     title_ui_window.add_child(
+
 
         [](){ 
             Ui::Element *elt = new Ui::StaticText(60, "spetals.io");

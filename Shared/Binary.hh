@@ -9,10 +9,14 @@
 
 
 
+
+
 enum Clientbound {
     kClientUpdate,
-    kMobGallery // initial or full mob gallery payload for the account
+    kMobGallery, // initial or full mob gallery payload for the account
+    kPetalGallery // initial or full petal gallery payload for the account
 };
+
 
 
 enum Serverbound {
