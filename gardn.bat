@@ -112,12 +112,36 @@ rem If script-default port (9009) is being used, force runtime to 9001 for local
 if "%GARDN_PORT%"=="9009" set "GARDN_PORT=9001"
 rem Update PORT to the effective port before attempting to kill
 set "PORT=%GARDN_PORT%"
+
+rem ===== Hardened DB environment (safe defaults) =====
+rem Use a single canonical DB path if not already provided by the user/env
+if not defined SPETALS_DB_PATH set "SPETALS_DB_PATH=C:\spetals\data.db"
+if not defined DB_BACKUP_DIR  set "DB_BACKUP_DIR=C:\spetals\db_backups"
+if not defined DB_BACKUP_RETENTION set "DB_BACKUP_RETENTION=30"
+if not defined ALLOW_ACCOUNT_CREATE set "ALLOW_ACCOUNT_CREATE=1"
+
+rem Ensure directories exist
+if not exist "C:\spetals" mkdir "C:\spetals" >nul 2>nul
+if not exist "%DB_BACKUP_DIR%" mkdir "%DB_BACKUP_DIR%" >nul 2>nul
+
+rem If DB file does not exist, allow initialization for this run only
+set "_ALLOW_INIT_FOR_RUN="
+if not exist "%SPETALS_DB_PATH%" (
+  set "ALLOW_INIT_DB=1"
+  set "_ALLOW_INIT_FOR_RUN=1"
+)
+
 call :kill >nul
 pushd "%REPO%"
 
-rem pass PORT env into node (server reads process.env.PORT or falls back to its default)
+rem Pass env into node (server reads env vars)
 set "PORT=%GARDN_PORT%"
 node Server\build\gardn-server.js
+
+rem Clear ALLOW_INIT_DB if we only set it for this run
+if defined _ALLOW_INIT_FOR_RUN set "ALLOW_INIT_DB="
+set "_ALLOW_INIT_FOR_RUN="
+
 popd
 exit /b 0
 
