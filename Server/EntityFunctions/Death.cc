@@ -5,7 +5,7 @@
 #ifndef WASM_SERVER
 #include <Server/AuthDB.hh>
 #else
-#include <Server/Account/WasmGalleryStore.hh>
+#include <Server/Account/WasmAccountStore.hh>
 #endif
 #include <Server/Account/AccountLink.hh>
 #include <Server/Server.hh>
@@ -74,7 +74,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
 #ifndef WASM_SERVER
                         AuthDB::record_mob_kill(acc, (int)ent.get_mob_id());
 #else
-                        WasmGalleryStore::record_kill(acc, (int)ent.get_mob_id());
+                        WasmAccountStore::set_bit(WasmAccountStore::Category::MobGallery, acc, (int)ent.get_mob_id());
                         record_mob_kill_js(acc.c_str(), (int)ent.get_mob_id());
 #endif
                         Server::game.send_mob_gallery_to_account(acc);

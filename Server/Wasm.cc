@@ -10,9 +10,9 @@
 
 #include <emscripten.h>
 #ifdef WASM_SERVER
-#include <Server/Account/WasmGalleryStore.hh>
-#include <Server/Account/WasmPetalGalleryStore.hh>
+#include <Server/Account/WasmAccountStore.hh>
 #endif
+
 
 
 
@@ -81,8 +81,9 @@ extern "C" void record_petal_obtained_js(const char *account_id_c, int petal_id)
 
 extern "C" void wasm_gallery_mark_for(const char *account_id_c, int mob_id) {
     if (!account_id_c) return;
-    WasmGalleryStore::record_kill(std::string(account_id_c), mob_id);
+    WasmAccountStore::set_bit(WasmAccountStore::Category::MobGallery, std::string(account_id_c), mob_id);
 }
+
 
 extern "C" void wasm_send_gallery_for(const char *account_id_c) {
     if (!account_id_c) return;
@@ -91,8 +92,9 @@ extern "C" void wasm_send_gallery_for(const char *account_id_c) {
 
 extern "C" void wasm_petal_gallery_mark_for(const char *account_id_c, int petal_id) {
     if (!account_id_c) return;
-    WasmPetalGalleryStore::record_obtained(std::string(account_id_c), petal_id);
+    WasmAccountStore::set_bit(WasmAccountStore::Category::PetalGallery, std::string(account_id_c), petal_id);
 }
+
 
 extern "C" void wasm_send_petal_gallery_for(const char *account_id_c) {
     if (!account_id_c) return;

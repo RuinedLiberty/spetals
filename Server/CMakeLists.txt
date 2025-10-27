@@ -31,8 +31,8 @@ set(SOURCES
     Spawn.cc
         TeamManager.cc
         Account/AccountLink.cc
-    Account/WasmGalleryStore.cc
-    Account/WasmPetalGalleryStore.cc
+        Account/WasmAccountStore.cc
+
 
 
     ../Helpers/Math.cc

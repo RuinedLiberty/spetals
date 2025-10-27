@@ -8,9 +8,9 @@
 #ifndef WASM_SERVER
 #include <Server/AuthDB.hh>
 #else
-#include <Server/Account/WasmGalleryStore.hh>
-#include <Server/Account/WasmPetalGalleryStore.hh>
+#include <Server/Account/WasmAccountStore.hh>
 #endif
+
 
 
 #include <Shared/Binary.hh>
@@ -37,9 +37,9 @@ static void _send_mob_gallery_for(Client *client) {
         }
     }
 #else
-    {
+        {
         std::vector<uint8_t> cached;
-        if (WasmGalleryStore::get_gallery_bits(client->account_id, cached)) {
+        if (WasmAccountStore::get_bits(WasmAccountStore::Category::MobGallery, client->account_id, cached)) {
             std::fill(bits.begin(), bits.end(), 0);
             uint32_t to_copy = std::min<uint32_t>((uint32_t)cached.size(), bytes);
             if (to_copy > 0) {
@@ -48,6 +48,7 @@ static void _send_mob_gallery_for(Client *client) {
         }
     }
 #endif
+
 
     w.write<uint32_t>(bytes);
     for (uint32_t i=0;i<bytes;++i) w.write<uint8_t>(bits[i]);
@@ -71,9 +72,9 @@ static void _send_petal_gallery_for(Client *client) {
         }
     }
 #else
-    {
+        {
         std::vector<uint8_t> cached;
-        if (WasmPetalGalleryStore::get_gallery_bits(client->account_id, cached)) {
+        if (WasmAccountStore::get_bits(WasmAccountStore::Category::PetalGallery, client->account_id, cached)) {
             std::fill(bits.begin(), bits.end(), 0);
             uint32_t to_copy = std::min<uint32_t>((uint32_t)cached.size(), bytes);
             if (to_copy > 0) {
@@ -82,6 +83,7 @@ static void _send_petal_gallery_for(Client *client) {
         }
     }
 #endif
+
     // Always ensure Basic petal is visible
     bits[(uint32_t)PetalID::kBasic >> 3] |= (1u << ((uint32_t)PetalID::kBasic & 7));
 

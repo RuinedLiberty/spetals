@@ -8,9 +8,10 @@
 #ifndef WASM_SERVER
 #include <Server/AuthDB.hh>
 #else
-#include <Server/Account/WasmPetalGalleryStore.hh>
+#include <Server/Account/WasmAccountStore.hh>
 #include <emscripten.h>
 #endif
+
 #include <Server/Account/AccountLink.hh>
 #include <Server/Server.hh>
 
@@ -43,10 +44,11 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
 #ifndef WASM_SERVER
                 AuthDB::record_petal_obtained(acc, (int)obtained);
 #else
-                WasmPetalGalleryStore::record_obtained(acc, (int)obtained);
+                WasmAccountStore::set_bit(WasmAccountStore::Category::PetalGallery, acc, (int)obtained);
                 // Forward to Node sqlite for persistence
                 EM_ASM({ try { Module.recordPetalObtained(UTF8ToString($0), $1); } catch(e) {} }, acc.c_str(), (int)obtained);
 #endif
+
                 Server::game.send_petal_gallery_to_account(acc);
             }
         }
