@@ -5,8 +5,12 @@
 #include <Client/Game.hh>
 
 #include <string>
+#include <algorithm>
+#include <cmath>
 
 #include <iostream>
+
+
 
 using namespace Ui;
 
@@ -15,18 +19,76 @@ static float const LEADERBOARD_WIDTH = 180;
 LeaderboardSlot::LeaderboardSlot(uint8_t p) : Element(LEADERBOARD_WIDTH, 18) , pos(p) {
     ratio.set(1);
     style.animate = [&](Element *, Renderer &){
-        if (pos >= Game::simulation.arena_info.player_count) return;
-        float r = 1;
-        if (((float) Game::simulation.arena_info.scores[0]) != 0) 
-            r = (float) Game::simulation.arena_info.scores[pos] / (float) Game::simulation.arena_info.scores[0];
+        auto &ai = Game::simulation.arena_info;
+        uint32_t const player_count = ai.player_count;
+        uint32_t const topN = std::min(player_count, LEADERBOARD_SIZE);
+
+                // Determine if we should force-show the local player in the 10th slot
+        uint8_t use_self_at_10 = 0;
+        if (Game::alive() && topN == LEADERBOARD_SIZE) {
+            Entity const &me = Game::simulation.get_ent(Game::player_id);
+            std::string const &pname = me.get_name();
+            uint8_t const pcolor = me.get_color();
+            float const my_score = (float) Game::score;
+            uint8_t found = 0;
+            for (uint32_t i = 0; i < topN; ++i) {
+                if (ai.names[i] == pname) { found = 1; break; }
+                if (ai.colors[i] == pcolor && std::fabs((float) ai.scores[i] - my_score) < 1.0f) { found = 1; break; }
+            }
+            if (!found && my_score <= (float) ai.scores[topN - 1]) use_self_at_10 = 1;
+        }
+
+
+        // If this slot is not going to render anything, skip animating
+        if (pos >= topN && !(use_self_at_10 && pos == LEADERBOARD_SIZE - 1)) return;
+
+        // Compute target ratio for this slot
+        float const max_score = ((float) ai.scores[0] != 0) ? (float) ai.scores[0] : 1.0f;
+        float r = 1.0f;
+        if (use_self_at_10 && pos == LEADERBOARD_SIZE - 1 && Game::alive()) {
+            float const my_score = (float) Game::score;
+            r = my_score / max_score;
+        } else {
+            r = (float) ai.scores[pos] / max_score;
+        }
         ratio.set(r);
         ratio.step(Ui::lerp_amount);
     };
 }
 
+
 void LeaderboardSlot::on_render(Renderer &ctx) {
-    //we do not hide it though
-    if (pos >= Game::simulation.arena_info.player_count) return;
+    auto &ai = Game::simulation.arena_info;
+    uint32_t const player_count = ai.player_count;
+    uint32_t const topN = std::min(player_count, LEADERBOARD_SIZE);
+
+        // Determine if we should force-show the local player in the 10th slot
+    uint8_t use_self_at_10 = 0;
+    std::string player_name;
+    uint8_t player_color = 0;
+    float player_score = 0;
+    if (Game::alive()) {
+        Entity const &me = Game::simulation.get_ent(Game::player_id);
+        player_name = me.get_name();
+        player_color = me.get_color();
+        player_score = (float) Game::score;
+                if (topN == LEADERBOARD_SIZE) {
+            uint8_t found = 0;
+            for (uint32_t i = 0; i < topN; ++i) {
+                if (ai.names[i] == player_name) { found = 1; break; }
+                if (ai.colors[i] == player_color && std::fabs((float) ai.scores[i] - player_score) < 1.0f) { found = 1; break; }
+            }
+            if (!found && player_score <= (float) ai.scores[topN - 1]) use_self_at_10 = 1;
+        }
+
+    }
+
+
+
+    // Early exit only if this slot will not display anything
+    if (pos >= topN && !(use_self_at_10 && pos == LEADERBOARD_SIZE - 1)) return;
+
+    // Background bar
     ctx.set_stroke(0xff222222);
     ctx.set_line_width(height);
     ctx.round_line_cap();
@@ -34,24 +96,51 @@ void LeaderboardSlot::on_render(Renderer &ctx) {
     ctx.move_to(-(width-height)/2,0);
     ctx.line_to((width-height)/2,0);
     ctx.stroke();
-    ctx.set_stroke(FLOWER_COLORS[Game::simulation.arena_info.colors[pos]]);
-    ctx.set_line_width(height * 0.8);
+
+    // Determine if this row is the local player and pick display data
+    bool is_self_row = false;
+    std::string name_str;
+    float score_val = 0.0f;
+
+    if (use_self_at_10 && pos == LEADERBOARD_SIZE - 1 && Game::alive()) {
+        // Force show the local player in 10th slot
+        is_self_row = true;
+        name_str = player_name.size() == 0 ? "Unnamed" : player_name;
+        score_val = player_score;
+        } else {
+        // Regular top list entry
+        name_str = ai.names[pos].size() == 0 ? "Unnamed" : ai.names[pos];
+        score_val = (float) ai.scores[pos];
+        if (Game::alive()) {
+            if (ai.names[pos] == player_name) is_self_row = true;
+            else if (ai.colors[pos] == player_color && std::fabs((float) ai.scores[pos] - player_score) < 1.0f) is_self_row = true;
+        }
+    }
+
+
+    // Foreground progress bar: player in yellow, others in the same green as header
+        uint32_t const other_green = 0xff55bb55;
+    uint32_t const self_yellow = FLOWER_COLORS[ColorID::kYellow];
+    ctx.set_stroke(is_self_row ? self_yellow : other_green);
+
+    ctx.set_line_width(height * 0.8f);
     ctx.begin_path();
     ctx.move_to(-(width-height)/2,0);
     ctx.line_to(-(width-height)/2+(width-height)*((float) ratio),0);
     ctx.stroke();
-    std::string format_string = std::format("{} - {}", 
-        Game::simulation.arena_info.names[pos].size() == 0 ? "Unnamed" : Game::simulation.arena_info.names[pos],
-        format_score((float) Game::simulation.arena_info.scores[pos]));
+
+    // Label text
+    std::string const format_string = std::format("{} - {}", name_str, format_score(score_val));
     ctx.set_fill(0xffffffff);
     ctx.set_stroke(0xff222222);
     ctx.center_text_align();
     ctx.center_text_baseline();
-    ctx.set_text_size(height * 0.75);
-    ctx.set_line_width(height * 0.75 * 0.12);
+    ctx.set_text_size(height * 0.75f);
+    ctx.set_line_width(height * 0.75f * 0.12f);
     ctx.stroke_text(format_string.c_str());
     ctx.fill_text(format_string.c_str());
 }
+
 
 Element *Ui::make_leaderboard() {
     Container *lb_header = new Ui::Container({
