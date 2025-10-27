@@ -170,6 +170,15 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             player.set_loadout_ids(pos2, tmp);
             break;
         }
+        case Serverbound::kPing: {
+            if (client->check_invalid(validator.validate_uint64())) return;
+            uint64_t ts = reader.read<uint64_t>();
+            Writer w(Server::OUTGOING_PACKET);
+            w.write<uint8_t>(Clientbound::kPingReply);
+            w.write<uint64_t>(ts);
+            client->send_packet(w.packet, w.at - w.packet);
+            break;
+        }
     }
 }
 

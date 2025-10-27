@@ -14,7 +14,8 @@
 enum Clientbound {
     kClientUpdate,
     kMobGallery, // initial or full mob gallery payload for the account
-    kPetalGallery // initial or full petal gallery payload for the account
+    kPetalGallery, // initial or full petal gallery payload for the account
+    kPingReply // echo reply for RTT measurement
 };
 
 
@@ -24,7 +25,8 @@ enum Serverbound {
     kClientInput,
     kClientSpawn,
     kPetalSwap,
-    kPetalDelete
+    kPetalDelete,
+    kPing
 };
 
 enum CloseReason {

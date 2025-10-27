@@ -2,6 +2,7 @@
 
 #include <Client/Input.hh>
 #include <Client/Ui/Ui.hh>
+#include <Client/Debug.hh>
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
@@ -61,15 +62,34 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             break;
         }
 
+        case Clientbound::kPingReply: {
+            uint64_t sent = reader.read<uint64_t>();
+            double now = Debug::get_timestamp();
+            double rtt = now - (double)sent;
+            Debug::ping_times.push_back(rtt);
+            break;
+        }
         default:
             break;
     }
 }
 
 
+
 void Game::send_inputs() {
+    static double last_ping = 0;
+    double now = Debug::get_timestamp();
+    if (now - last_ping > 1000.0) {
+        Writer pw(static_cast<uint8_t *>(OUTGOING_PACKET));
+        pw.write<uint8_t>(Serverbound::kPing);
+        pw.write<uint64_t>((uint64_t)now);
+        socket.send(pw.packet, pw.at - pw.packet);
+        last_ping = now;
+    }
+
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kClientInput);
+
     if (Input::freeze_input) {
         writer.write<float>(0);
         writer.write<float>(0);

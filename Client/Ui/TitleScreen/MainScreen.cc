@@ -256,8 +256,25 @@ Element *Ui::make_debug_stats() {
                 avg_dt += frame_time;
             }
             avg_dt /= Debug::tick_times.size();
-            return std::format("tick: {:.1f}/{:.1f}/{:.1f} ms (min/avg/max)", min_dt, avg_dt, max_dt, 1000 / Ui::dt);
+            // Ping stats
+            double ping_avg = 0, ping_min = 0, ping_max = 0;
+            if (Debug::ping_times.size() > 0) {
+                ping_min = ping_max = Debug::ping_times[0];
+                ping_avg = ping_min;
+                for (uint32_t i = 1; i < Debug::ping_times.size(); ++i) {
+                    double p = Debug::ping_times[i];
+                    if (p < ping_min) ping_min = p;
+                    if (p > ping_max) ping_max = p;
+                    ping_avg += p;
+                }
+                ping_avg /= Debug::ping_times.size();
+            }
+            if (Debug::ping_times.size() > 0)
+                return std::format("tick: {:.1f}/{:.1f}/{:.1f} ms (min/avg/max) | ping: {:.0f}/{:.0f}/{:.0f} ms", min_dt, avg_dt, max_dt, ping_min, ping_avg, ping_max);
+            else
+                return std::format("tick: {:.1f}/{:.1f}/{:.1f} ms (min/avg/max)", min_dt, avg_dt, max_dt);
         }, { .fill = 0xffffffff, .h_justify = Style::Right }),
+
         new Ui::DynamicText(12, [](){
             if (Debug::frame_times.size() == 0) return std::string{"Failed to show debug stats"};
             float min_dt = Debug::frame_times[0];
