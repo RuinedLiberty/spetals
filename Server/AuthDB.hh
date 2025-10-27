@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace AuthDB {
     // Initialize SQLite database and ensure schema exists
@@ -26,6 +27,12 @@ namespace AuthDB {
 
     // Fetch list of mob_ids this account has killed/seen. Returns true on success.
     bool get_mob_ids(const std::string &account_id, std::vector<int> &mob_ids_out);
+
+    // Petal gallery: record newly obtained petal (from inventory acquisition)
+    bool record_petal_obtained(const std::string &account_id, int petal_id);
+
+    // Fetch list of obtained petal ids for this account.
+    bool get_petal_ids(const std::string &account_id, std::vector<int> &petal_ids_out);
 }
 
 

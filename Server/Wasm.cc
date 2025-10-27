@@ -11,7 +11,9 @@
 #include <emscripten.h>
 #ifdef WASM_SERVER
 #include <Server/Account/WasmGalleryStore.hh>
+#include <Server/Account/WasmPetalGalleryStore.hh>
 #endif
+
 
 
 std::unordered_map<int, WebSocket *> WS_MAP;
@@ -68,6 +70,13 @@ extern "C" void record_mob_kill_js(const char *account_id_c, int mob_id) {
     }, account_id_c, mob_id);
 }
 
+extern "C" void record_petal_obtained_js(const char *account_id_c, int petal_id) {
+    EM_ASM({
+        try { Module.recordPetalObtained(UTF8ToString($0), $1); } catch(e) {}
+    }, account_id_c, petal_id);
+}
+
+
 
 
 extern "C" void wasm_gallery_mark_for(const char *account_id_c, int mob_id) {
@@ -79,6 +88,17 @@ extern "C" void wasm_send_gallery_for(const char *account_id_c) {
     if (!account_id_c) return;
     Server::game.send_mob_gallery_to_account(std::string(account_id_c));
 }
+
+extern "C" void wasm_petal_gallery_mark_for(const char *account_id_c, int petal_id) {
+    if (!account_id_c) return;
+    WasmPetalGalleryStore::record_obtained(std::string(account_id_c), petal_id);
+}
+
+extern "C" void wasm_send_petal_gallery_for(const char *account_id_c) {
+    if (!account_id_c) return;
+    Server::game.send_petal_gallery_to_account(std::string(account_id_c));
+}
+
 
 
 
@@ -160,38 +180,56 @@ WebSocketServer::WebSocketServer() {
                 discord_user_id TEXT NOT NULL UNIQUE,\
                 created_at INTEGER NOT NULL\
             )');
-            db.run('CREATE TABLE IF NOT EXISTS mob_kills (\
+                        db.run('CREATE TABLE IF NOT EXISTS mob_kills (\
                 account_id TEXT NOT NULL,\
                 mob_id INTEGER NOT NULL,\
                 kills INTEGER NOT NULL DEFAULT 0,\
                 PRIMARY KEY (account_id, mob_id)\
             )');
+            db.run('CREATE TABLE IF NOT EXISTS petal_obtained (\
+                account_id TEXT NOT NULL,\
+                petal_id INTEGER NOT NULL,\
+                obtained INTEGER NOT NULL DEFAULT 1,\
+                PRIMARY KEY (account_id, petal_id)\
+            )');
         });
 
         // Expose helpers to persist and fetch mob gallery
-                        Module.recordMobKill = function(accountId, mobId) {
+        Module.recordMobKill = function(accountId, mobId) {
             try {
                 db.run('INSERT INTO mob_kills (account_id, mob_id, kills) VALUES (?, ?, 1) ON CONFLICT(account_id, mob_id) DO UPDATE SET kills = kills + 1', [accountId, mobId]);
             } catch(e) {}
         };
-        Module.seedGalleryForAccount = function(accountId) {
+        Module.recordPetalObtained = function(accountId, petalId) {
             try {
-                db.all('SELECT mob_id FROM mob_kills WHERE account_id=?', [accountId], function(err, rows){
-                    if (err) { return; }
-                    const len = lengthBytesUTF8(accountId) + 1;
-                    const ptr = _malloc(len);
-                    stringToUTF8(accountId, ptr, len);
-                    try {
-                        if (rows && rows.length) {
-                            for (const r of rows) {
-                                try { _wasm_gallery_mark_for(ptr, r.mob_id|0); } catch(e) {}
-                            }
-                        }
-                        try { _wasm_send_gallery_for(ptr); } catch(e) {}
-                    } finally { _free(ptr); }
-                });
+                db.run('INSERT INTO petal_obtained (account_id, petal_id, obtained) VALUES (?, ?, 1) ON CONFLICT(account_id, petal_id) DO NOTHING', [accountId, petalId]);
             } catch(e) {}
         };
+        Module.seedGalleryForAccount = function(accountId) {
+            try {
+                const len = lengthBytesUTF8(accountId) + 1;
+                const ptr = _malloc(len);
+                stringToUTF8(accountId, ptr, len);
+                db.all('SELECT mob_id FROM mob_kills WHERE account_id=?', [accountId], function(err, rows){
+                    if (!err && rows && rows.length) {
+                        for (const r of rows) {
+                            try { _wasm_gallery_mark_for(ptr, r.mob_id|0); } catch(e) {}
+                        }
+                    }
+                    try { _wasm_send_gallery_for(ptr); } catch(e) {}
+                });
+                db.all('SELECT petal_id FROM petal_obtained WHERE account_id=?', [accountId], function(err, rows){
+                    if (!err && rows && rows.length) {
+                        for (const r of rows) {
+                            try { _wasm_petal_gallery_mark_for(ptr, r.petal_id|0); } catch(e) {}
+                        }
+                    }
+                    try { _wasm_send_petal_gallery_for(ptr); } catch(e) {}
+                });
+                _free(ptr);
+            } catch(e) {}
+        };
+
 
 
 
@@ -378,9 +416,9 @@ WebSocketServer::WebSocketServer() {
             Module.userActiveWs.set(sess.userId, ws_id);
             Module.sessionByWs.set(ws_id, sess.userId);
 
-                        // Log account id and discord display
+                                                // Log account id and discord display
             let accountIdForConn = null;
-                                                                                    const proceed = (accountId) => { accountIdForConn = accountId || null;
+            const proceed = (accountId) => { accountIdForConn = accountId || null;
                 const discordDisplay = (sess.username || sess.userId || 'unknown');
                 console.log('Client connected: account_id=' + (accountId || 'unknown') + ', discord=' + discordDisplay);
                 // Create native WebSocket, then set account, then seed gallery from DB and push
@@ -396,6 +434,7 @@ WebSocketServer::WebSocketServer() {
                     try { Module.seedGalleryForAccount(accountId); } catch(e) {}
                 }
             };
+
 
 
 

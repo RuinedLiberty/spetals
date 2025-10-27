@@ -5,6 +5,16 @@
 
 #include <cmath>
 #include <iostream>
+#ifndef WASM_SERVER
+#include <Server/AuthDB.hh>
+#else
+#include <Server/Account/WasmPetalGalleryStore.hh>
+#include <emscripten.h>
+#endif
+#include <Server/Account/AccountLink.hh>
+#include <Server/Server.hh>
+
+
 
 static bool _should_interact(Entity const &ent1, Entity const &ent2) {
     //if (ent1.has_component(kFlower) || ent2.has_component(kFlower)) return false;
@@ -23,7 +33,24 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
 
     for (uint32_t i = 0; i <  player.get_loadout_count() + MAX_SLOT_COUNT; ++i) {
         if (player.get_loadout_ids(i) != PetalID::kNone) continue;
-        player.set_loadout_ids(i, drop.get_drop_id());
+        // Assign petal into an empty slot
+        PetalID::T obtained = drop.get_drop_id();
+        player.set_loadout_ids(i, obtained);
+        // Persist to account petal gallery when applicable
+        if (obtained != PetalID::kNone) {
+            std::string acc = AccountLink::get_account_for_entity(player.id);
+            if (!acc.empty()) {
+#ifndef WASM_SERVER
+                AuthDB::record_petal_obtained(acc, (int)obtained);
+#else
+                WasmPetalGalleryStore::record_obtained(acc, (int)obtained);
+                // Forward to Node sqlite for persistence
+                EM_ASM({ try { Module.recordPetalObtained(UTF8ToString($0), $1); } catch(e) {} }, acc.c_str(), (int)obtained);
+#endif
+                Server::game.send_petal_gallery_to_account(acc);
+            }
+        }
+        // Finish pickup
         drop.set_x(player.get_x());
         drop.set_y(player.get_y());
         BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
@@ -32,6 +59,7 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
         return;
     }
 }
+
 
 #define NO(component) (!ent1.has_component(component) && !ent2.has_component(component))
 #define BOTH(component) (ent1.has_component(component) && ent2.has_component(component))
