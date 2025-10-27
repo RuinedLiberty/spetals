@@ -7,6 +7,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <vector>
+#include <filesystem>
 
 namespace {
     sqlite3 *g_db = nullptr;
@@ -21,12 +22,33 @@ bool init(const std::string &db_path) {
         g_db_path = db_path;
     } else {
         const char *envp = std::getenv("SPETALS_DB_PATH");
-        g_db_path = envp && *envp ? std::string(envp) : std::string("data.db");
+        if (envp && *envp) {
+            g_db_path = std::string(envp);
+        } else {
+            const char *allow = std::getenv("ALLOW_INIT_DB");
+            if (!(allow && std::string(allow) == "1")) {
+                std::cerr << "Fatal: SPETALS_DB_PATH not set and ALLOW_INIT_DB != 1. Refusing implicit DB.\n";
+                return false;
+            }
+            g_db_path = std::string("data.db");
+        }
+    }
+    bool exists_before = std::filesystem::exists(g_db_path);
+    if (!exists_before) {
+        const char *allow = std::getenv("ALLOW_INIT_DB");
+        if (!(allow && std::string(allow) == "1")) {
+            std::cerr << "Fatal: DB does not exist at " << g_db_path << "; set ALLOW_INIT_DB=1 to initialize.\n";
+            return false;
+        }
     }
     if (sqlite3_open(g_db_path.c_str(), &g_db) != SQLITE_OK) {
         std::cerr << "SQLite open failed: " << sqlite3_errmsg(g_db) << "\n";
         return false;
     }
+    sqlite3_busy_timeout(g_db, 5000);
+    sqlite3_exec(g_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+    sqlite3_exec(g_db, "PRAGMA synchronous=FULL;", nullptr, nullptr, nullptr);
+    sqlite3_exec(g_db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
         const char *schema =
         "PRAGMA journal_mode=WAL;"
         "CREATE TABLE IF NOT EXISTS accounts (\n"
@@ -75,6 +97,38 @@ bool init(const std::string &db_path) {
         std::cerr << "SQLite schema error: " << (errmsg ? errmsg : "") << "\n";
         if (errmsg) sqlite3_free(errmsg);
         return false;
+    }
+    // meta table for db_instance_id and schema_version
+    sqlite3_exec(g_db, "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);", nullptr, nullptr, nullptr);
+    // db_instance_id
+    {
+        sqlite3_stmt *s = nullptr;
+        if (sqlite3_prepare_v2(g_db, "SELECT value FROM meta WHERE key='db_instance_id' LIMIT 1", -1, &s, nullptr) == SQLITE_OK) {
+            int rc = sqlite3_step(s);
+            sqlite3_finalize(s);
+            if (rc != SQLITE_ROW) {
+                auto rnd = [](){ unsigned r = (unsigned) std::rand(); return r; };
+                auto hex16 = [](unsigned v){ char b[17]; std::snprintf(b, sizeof(b), "%08x", v); return std::string(b); };
+                std::string inst = hex16(rnd()) + hex16(rnd());
+                sqlite3_stmt *ins = nullptr;
+                if (sqlite3_prepare_v2(g_db, "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_instance_id', ?1)", -1, &ins, nullptr) == SQLITE_OK) {
+                    sqlite3_bind_text(ins, 1, inst.c_str(), -1, SQLITE_STATIC);
+                    sqlite3_step(ins);
+                    sqlite3_finalize(ins);
+                }
+            }
+        }
+    }
+    // schema_version
+    {
+        sqlite3_stmt *s = nullptr;
+        if (sqlite3_prepare_v2(g_db, "SELECT value FROM meta WHERE key='schema_version' LIMIT 1", -1, &s, nullptr) == SQLITE_OK) {
+            int rc = sqlite3_step(s);
+            sqlite3_finalize(s);
+            if (rc != SQLITE_ROW) {
+                sqlite3_exec(g_db, "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version','1')", nullptr, nullptr, nullptr);
+            }
+        }
     }
     return true;
 }

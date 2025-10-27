@@ -156,13 +156,31 @@ WebSocketServer::WebSocketServer() {
         }
         function makeToken() { return crypto.randomBytes(32).toString("hex"); }
 
-        // SQLite init
-        var DB_PATH = process.env.DB_PATH || "data.db";
-        if (!fs.existsSync(DB_PATH)) {
-            fs.writeFileSync(DB_PATH, "");
+                // SQLite init (secure, single canonical path)
+        const ALLOW_INIT_DB = (process.env.ALLOW_INIT_DB === '1');
+        var DB_PATH = process.env.SPETALS_DB_PATH || process.env.DB_PATH;
+        if (!DB_PATH) {
+            if (!ALLOW_INIT_DB) { console.error('Fatal: SPETALS_DB_PATH not set and ALLOW_INIT_DB != 1.'); process.exit(1); }
+            DB_PATH = 'data.db';
         }
-                var db = new sqlite3.Database(DB_PATH);
+        if (!fs.existsSync(DB_PATH)) {
+            if (!ALLOW_INIT_DB) { console.error('Fatal: DB does not exist at ' + DB_PATH + '; set ALLOW_INIT_DB=1 to initialize.'); process.exit(1); }
+        }
+        var db = new sqlite3.Database(DB_PATH);
         db.serialize(function() {
+            try { db.run('PRAGMA journal_mode=WAL'); } catch(e) {}
+            try { db.run('PRAGMA synchronous=FULL'); } catch(e) {}
+            try { db.run('PRAGMA foreign_keys=ON'); } catch(e) {}
+            try { db.run('PRAGMA busy_timeout=5000'); } catch(e) {}
+            db.run('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+            db.get('SELECT value FROM meta WHERE key=?', ['db_instance_id'], function(err,row){
+                if (!row) {
+                    try { db.run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', ['db_instance_id', (crypto.randomBytes(16).toString('hex'))]); } catch(e) {}
+                }
+            });
+            db.get('SELECT value FROM meta WHERE key=?', ['schema_version'], function(err,row){
+                if (!row) { try { db.run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', ['schema_version','1']); } catch(e) {} }
+            });
             db.run('CREATE TABLE IF NOT EXISTS users (\
                 discord_id TEXT PRIMARY KEY,\
                 username TEXT,\
@@ -177,12 +195,12 @@ WebSocketServer::WebSocketServer() {
                 banned INTEGER NOT NULL DEFAULT 0,\
                 ban_reason TEXT\
             )');
-                        db.run('CREATE TABLE IF NOT EXISTS discord_links (\
+            db.run('CREATE TABLE IF NOT EXISTS discord_links (\
                 account_id TEXT NOT NULL,\
                 discord_user_id TEXT NOT NULL UNIQUE,\
                 created_at INTEGER NOT NULL\
             )');
-                        db.run('CREATE TABLE IF NOT EXISTS mob_kills (\
+            db.run('CREATE TABLE IF NOT EXISTS mob_kills (\
                 account_id TEXT NOT NULL,\
                 mob_id INTEGER NOT NULL,\
                 kills INTEGER NOT NULL DEFAULT 0,\
@@ -195,9 +213,11 @@ WebSocketServer::WebSocketServer() {
                 PRIMARY KEY (account_id, petal_id)\
             )');
         });
+        console.log('Using DB at: ' + DB_PATH);
 
         // Expose helpers to persist and fetch mob gallery
         Module.recordMobKill = function(accountId, mobId) {
+
             try {
                 db.run('INSERT INTO mob_kills (account_id, mob_id, kills) VALUES (?, ?, 1) ON CONFLICT(account_id, mob_id) DO UPDATE SET kills = kills + 1', [accountId, mobId]);
             } catch(e) {}
@@ -324,8 +344,10 @@ WebSocketServer::WebSocketServer() {
                                 if (err) reject(err); else resolve(row ? row.account_id : null);
                             });
                         });
-                        if (!accountId) {
-                            // Prefer crypto.randomUUID if available
+                                                if (!accountId) {
+                            if (process.env.ALLOW_ACCOUNT_CREATE !== '1') {
+                                res.writeHead(500); res.end('Account linking disabled (ALLOW_ACCOUNT_CREATE != 1).'); return;
+                            }
                             const gen = (crypto.randomUUID ? crypto.randomUUID() : (function(){ const r = crypto.randomBytes(16).toString('hex'); return r.slice(0,8)+'-'+r.slice(8,12)+'-'+r.slice(12,16)+'-'+r.slice(16,20)+'-'+r.slice(20); })());
                             accountId = gen;
                             await new Promise(function(resolve, reject){
@@ -335,6 +357,7 @@ WebSocketServer::WebSocketServer() {
                                 db.run('INSERT INTO discord_links (account_id, discord_user_id, created_at) VALUES (?, ?, ?)', [accountId, user.id, Math.floor(now/1000)], function(err){ if (err) reject(err); else resolve(); });
                             });
                         }
+
                         Module.accByDiscord.set(user.id, accountId);
                         // create session
                         const token = makeToken();
@@ -405,7 +428,33 @@ WebSocketServer::WebSocketServer() {
             console.log("Server running at http://localhost:" + port);
         });
         
+                // Automated backups
+        (function(){
+            try {
+                const path = require('path');
+                const BACKUP_DIR = process.env.DB_BACKUP_DIR || 'db_backups';
+                const RET = parseInt(process.env.DB_BACKUP_RETENTION || '30', 10);
+                if (!fs.existsSync(BACKUP_DIR)) { try { fs.mkdirSync(BACKUP_DIR, { recursive: true }); } catch(e) {} }
+                function doBackup(){
+                    try {
+                        if (!fs.existsSync(DB_PATH)) return;
+                        const ts = new Date().toISOString().replace(/[:T]/g,'-').split('.')[0];
+                        const dest = path.join(BACKUP_DIR, 'backup-' + ts + '.db');
+                        fs.copyFileSync(DB_PATH, dest);
+                        // Cleanup old backups
+                        const files = fs.readdirSync(BACKUP_DIR).filter(f=>f.endsWith('.db')).map(f=>({f, t: fs.statSync(path.join(BACKUP_DIR,f)).mtimeMs})).sort((a,b)=>b.t-a.t);
+                        for (let i=RET; i<files.length; ++i) {
+                            try { fs.unlinkSync(path.join(BACKUP_DIR, files[i].f)); } catch(e) {}
+                        }
+                    } catch(e) {}
+                }
+                doBackup();
+                setInterval(doBackup, 1000 * 60 * 60 * 6);
+            } catch(e) {}
+        })();
+
         const wss = new WSS.Server({ "server": server });
+
 
         let curr_id = 0;
                     wss.on("connection", function(ws, req) {
