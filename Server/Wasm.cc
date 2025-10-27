@@ -13,12 +13,17 @@
 #include <Server/Account/WasmAccountStore.hh>
 #endif
 
-
-
-
+// -----------------------------------------------------------------------------
+// uWS bridge state: runtime map of integer ws_id -> WebSocket wrapper
+// -----------------------------------------------------------------------------
 std::unordered_map<int, WebSocket *> WS_MAP;
 
+
+// -----------------------------------------------------------------------------
+// Externs: bridge helpers to attach account ids to ws connections
+// -----------------------------------------------------------------------------
 extern "C" void set_ws_account(int ws_id, const char *account_id) {
+
     auto it = WS_MAP.find(ws_id);
     if (it == WS_MAP.end() || !account_id) return;
     it->second->getUserData()->account_id = std::string(account_id);
@@ -104,8 +109,16 @@ extern "C" void wasm_send_petal_gallery_for(const char *account_id_c) {
 
 
 
+// -----------------------------------------------------------------------------
+// WebSocketServer runtime (Node.js via EM_ASM)
+// - HTTP endpoints: /, /gardn-client.js, /gardn-client.wasm, /auth/*, /api/*
+// - WS endpoint: handled by uWS bridge
+// - DB: SQLite with WAL + FULL + FK enforcement
+// -----------------------------------------------------------------------------
 WebSocketServer::WebSocketServer() {
     EM_ASM((function(){
+        // ---- Node runtime (injected) ----
+
 
         const WSS = require("ws");
 
@@ -115,13 +128,14 @@ WebSocketServer::WebSocketServer() {
         const crypto = require("crypto");
         const sqlite3 = require("sqlite3").verbose();
 
-        // Minimal session store (in-memory)
+        // Session cookie name and TTL (persistent login across restarts)
         const SESS_COOKIE = "sess";
-        const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
-        Module.sessions = Module.sessions || new Map(); // token -> { userId, username, createdAt }
-        Module.userActiveWs = Module.userActiveWs || new Map(); // userId -> ws_id
+        const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
+        // Active connection maps
+        Module.userActiveWs = Module.userActiveWs || new Map(); // discord_user_id -> ws_id
         Module.ws_connections = Module.ws_connections || {};
-        Module.sessionByWs = Module.sessionByWs || new Map(); // ws_id -> userId
+        Module.sessionByWs = Module.sessionByWs || new Map(); // ws_id -> discord_user_id
+
 
         // Discord config (prefer env, fallback to provided defaults)
         const DISCORD = {
@@ -144,17 +158,19 @@ WebSocketServer::WebSocketServer() {
             });
             return out;
         }
-        function setCookie(res, name, value, opts) {
+                function setCookie(res, name, value, opts) {
             opts = opts || {};
             let cookie = name + "=" + encodeURIComponent(value);
             if (opts.maxAge) cookie += "; Max-Age=" + Math.floor(opts.maxAge/1000);
             cookie += "; HttpOnly; SameSite=Lax; Path=/";
+            if (opts.secure) cookie += "; Secure";
             res.setHeader("Set-Cookie", cookie);
         }
         function clearCookie(res, name) {
             res.setHeader("Set-Cookie", name + "=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax");
         }
         function makeToken() { return crypto.randomBytes(32).toString("hex"); }
+
 
                 // SQLite init (secure, single canonical path)
         const ALLOW_INIT_DB = (process.env.ALLOW_INIT_DB === '1');
@@ -195,11 +211,19 @@ WebSocketServer::WebSocketServer() {
                 banned INTEGER NOT NULL DEFAULT 0,\
                 ban_reason TEXT\
             )');
-            db.run('CREATE TABLE IF NOT EXISTS discord_links (\
+                        db.run('CREATE TABLE IF NOT EXISTS discord_links (\
                 account_id TEXT NOT NULL,\
                 discord_user_id TEXT NOT NULL UNIQUE,\
                 created_at INTEGER NOT NULL\
             )');
+            db.run('CREATE TABLE IF NOT EXISTS sessions (\
+                id TEXT PRIMARY KEY,\
+                account_id TEXT NOT NULL,\
+                created_at INTEGER NOT NULL,\
+                expires_at INTEGER NOT NULL,\
+                revoked INTEGER NOT NULL DEFAULT 0\
+            )');
+
             db.run('CREATE TABLE IF NOT EXISTS mob_kills (\
                 account_id TEXT NOT NULL,\
                 mob_id INTEGER NOT NULL,\
@@ -358,40 +382,50 @@ WebSocketServer::WebSocketServer() {
                             });
                         }
 
-                        Module.accByDiscord.set(user.id, accountId);
-                        // create session
+                                                Module.accByDiscord.set(user.id, accountId);
+                        // create persistent session in DB
                         const token = makeToken();
-                        Module.sessions.set(token, { userId: user.id, username: user.username, createdAt: now });
-                        setCookie(res, SESS_COOKIE, token, { maxAge: SESSION_TTL_MS });
+                        const createdAt = Math.floor(Date.now()/1000);
+                        const expiresAt = Math.floor((Date.now()+SESSION_TTL_MS)/1000);
+                        await new Promise((resolve,reject)=>{ db.run('INSERT INTO sessions (id, account_id, created_at, expires_at, revoked) VALUES (?, ?, ?, ?, 0)', [token, accountId, createdAt, expiresAt], function(err){ if (err) reject(err); else resolve(); }); });
+                        var secure = (proto === 'https');
+                        setCookie(res, SESS_COOKIE, token, { maxAge: SESSION_TTL_MS, secure });
                         res.writeHead(302, { "Location": "/" });
                         return res.end();
+
                     } catch(err) {
                         res.writeHead(500); res.end("OAuth Error"); return;
                     }
                 }
-                if (req.url.startsWith("/auth/logout")) {
+                                if (req.url.startsWith("/auth/logout")) {
                     const cookies = parseCookies(req.headers.cookie||"");
                     const tok = cookies[SESS_COOKIE];
-                    if (tok) Module.sessions.delete(tok);
+                    if (tok) { try { db.run('UPDATE sessions SET revoked=1 WHERE id=?', [tok]); } catch(e) {} }
                     clearCookie(res, SESS_COOKIE);
                     res.writeHead(302, { "Location": "/" });
                     return res.end();
                 }
 
+
                 // API: minimal account info
-                if (req.url.startsWith("/api/me")) {
+                                if (req.url.startsWith("/api/me")) {
                     const cookies = parseCookies(req.headers.cookie||"");
                     const tok = cookies[SESS_COOKIE];
-                    const sess = tok ? Module.sessions.get(tok) : null;
-                    if (!sess) { res.writeHead(401).end("Unauthorized"); return; }
-                    db.all("SELECT discord_id, username, account_xp, account_level FROM users WHERE discord_id=?", [sess.userId], function(err, rows) {
+                    const row = tok ? await new Promise((resolve)=>{ db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [tok], function(err,row){ resolve(err?null:row); }); }) : null;
+                    if (!row || row.revoked) { res.writeHead(401).end("Unauthorized"); return; }
+                    const now = Math.floor(Date.now()/1000);
+                    if (now > Number(row.expires_at)) { res.writeHead(401).end("Unauthorized"); return; }
+                    const link = await new Promise((resolve)=>{ db.get('SELECT discord_user_id FROM discord_links WHERE account_id=? LIMIT 1', [row.account_id], function(err,row){ resolve(err?null:row); }); });
+                    if (!link) { res.writeHead(401).end("Unauthorized"); return; }
+                    db.all("SELECT discord_id, username, account_xp, account_level FROM users WHERE discord_id=?", [link.discord_user_id], function(err, rows) {
                         if (err) { res.writeHead(500).end("DB Error"); return; }
-                        const row = (rows && rows[0]) ? rows[0] : { discord_id: sess.userId, username: sess.username, account_xp: 0, account_level: 1 };
+                        const out = (rows && rows[0]) ? rows[0] : { discord_id: link.discord_user_id, username: '', account_xp: 0, account_level: 1 };
                         res.writeHead(200, { "Content-Type": "application/json" });
-                        res.end(JSON.stringify(row));
+                        res.end(JSON.stringify(out));
                     });
                     return;
                 }
+
 
                 // Static file server
                 let encodeType = "text/html";
@@ -462,80 +496,60 @@ WebSocketServer::WebSocketServer() {
             Module.ws_connections[ws_id] = ws;
             curr_id = (curr_id + 1) | 0;
 
-            // Authenticate via cookie
+            // Authenticate via cookie using DB-backed sessions
             const cookies = parseCookies(req.headers.cookie||"");
             const tok = cookies[SESS_COOKIE];
-            const sess = tok ? Module.sessions.get(tok) : null;
-            if (!sess) {
-                try { ws.close(4002, "Auth Required"); } catch(e){}
-                return;
-            }
-            // Single-session enforcement
-            const prev = Module.userActiveWs.get(sess.userId);
-            if (prev !== undefined && Module.ws_connections[prev]) {
-                try { Module.ws_connections[prev].close(4002, "Another session started"); } catch(e){}
-            }
-            Module.userActiveWs.set(sess.userId, ws_id);
-            Module.sessionByWs.set(ws_id, sess.userId);
-
-                                                // Log account id and discord display
-            let accountIdForConn = null;
-            const proceed = (accountId) => { accountIdForConn = accountId || null;
-                const discordDisplay = (sess.username || sess.userId || 'unknown');
-                console.log('Client connected: account_id=' + (accountId || 'unknown') + ', discord=' + discordDisplay);
-                // Create native WebSocket, then set account, then seed gallery from DB and push
-                _on_connect(ws_id);
-                if (accountId) {
-                    try {
-                        const len = lengthBytesUTF8(accountId) + 1;
-                        const ptr = _malloc(len);
-                        stringToUTF8(accountId, ptr, len);
-                        _set_ws_account(ws_id, ptr);
-                        _free(ptr);
-                    } catch (e) {}
-                    try { Module.seedGalleryForAccount(accountId); } catch(e) {}
-                }
-            };
-
-
-
-
-
-
-
-            let accId = (Module.accByDiscord && Module.accByDiscord.get(sess.userId));
-            if (!accId) {
-                db.get('SELECT account_id FROM discord_links WHERE discord_user_id=?', [sess.userId], function(err, row){
-                    if (row && row.account_id) {
-                        if (!Module.accByDiscord) Module.accByDiscord = new Map();
-                        Module.accByDiscord.set(sess.userId, row.account_id);
-                        proceed(row.account_id);
-                    } else {
-                        proceed(null);
-                    }
-                });
-            } else {
-                proceed(accId);
-            }
-
-
-            ws.on("message", function(message) {
-                let data = new Uint8Array(message);
-                const len = data.length > $2 ? $2 : data.length;
-                data = data.subarray(0, len);
-                HEAPU8.set(data, $1);
-                _on_message(ws_id, len);
+            db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [tok], function(err, srow){
+                try {
+                    if (err || !srow || srow.revoked) { try { ws.close(4002, "Auth Required"); } catch(e){} return; }
+                    const now = Math.floor(Date.now()/1000);
+                    if (now > Number(srow.expires_at)) { try { ws.close(4002, "Auth Required"); } catch(e){} return; }
+                    db.get('SELECT discord_user_id FROM discord_links WHERE account_id=? LIMIT 1', [srow.account_id], function(err2, link){
+                        if (err2 || !link) { try { ws.close(4002, "Auth Required"); } catch(e){} return; }
+                        // Single-session enforcement by discord id
+                        const prev = Module.userActiveWs.get(link.discord_user_id);
+                        if (prev !== undefined && Module.ws_connections[prev]) {
+                            try { Module.ws_connections[prev].close(4002, "Another session started"); } catch(e){}
+                        }
+                        Module.userActiveWs.set(link.discord_user_id, ws_id);
+                        Module.sessionByWs.set(ws_id, link.discord_user_id);
+                        // proceed with mapped account
+                        const accountIdForConn = srow.account_id;
+                        const discordDisplay = (link.discord_user_id || 'unknown');
+                        console.log('Client connected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + discordDisplay);
+                        _on_connect(ws_id);
+                        if (accountIdForConn) {
+                            try {
+                                const len = lengthBytesUTF8(accountIdForConn) + 1;
+                                const ptr = _malloc(len);
+                                stringToUTF8(accountIdForConn, ptr, len);
+                                _set_ws_account(ws_id, ptr);
+                                _free(ptr);
+                            } catch (e) {}
+                            try { Module.seedGalleryForAccount(accountIdForConn); } catch(e) {}
+                        }
+                        // attach ws handlers
+                        ws.on("message", function(message) {
+                            let data = new Uint8Array(message);
+                            const len = data.length > $2 ? $2 : data.length;
+                            data = data.subarray(0, len);
+                            HEAPU8.set(data, $1);
+                            _on_message(ws_id, len);
+                        });
+                        ws.on("close", function(reason) {
+                            const uid = Module.sessionByWs.get(ws_id);
+                            if (uid && Module.userActiveWs.get(uid) === ws_id)
+                                Module.userActiveWs.delete(uid);
+                            Module.sessionByWs.delete(ws_id);
+                            console.log('Client disconnected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + discordDisplay + ', code=' + reason);
+                            _on_disconnect(ws_id, reason);
+                            delete Module.ws_connections[ws_id];
+                        });
+                    });
+                } catch(e) { try { ws.close(4002, "Auth Required"); } catch(_){} }
             });
-            ws.on("close", function(reason) {
-                const uid = Module.sessionByWs.get(ws_id);
-                if (uid && Module.userActiveWs.get(uid) === ws_id)
-                    Module.userActiveWs.delete(uid);
-                Module.sessionByWs.delete(ws_id);
-                console.log('Client disconnected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + (sess.username || sess.userId || 'unknown') + ', code=' + reason);
-                _on_disconnect(ws_id, reason);
-                delete Module.ws_connections[ws_id];
-            });
-                })
+        })
+
     })(), SERVER_PORT, INCOMING_BUFFER, MAX_BUFFER_LEN);
 }
 
