@@ -207,30 +207,41 @@ WebSocketServer::WebSocketServer() {
                 db.run('INSERT INTO petal_obtained (account_id, petal_id, obtained) VALUES (?, ?, 1) ON CONFLICT(account_id, petal_id) DO NOTHING', [accountId, petalId]);
             } catch(e) {}
         };
-        Module.seedGalleryForAccount = function(accountId) {
+                Module.seedGalleryForAccount = function(accountId) {
             try {
-                const len = lengthBytesUTF8(accountId) + 1;
-                const ptr = _malloc(len);
-                stringToUTF8(accountId, ptr, len);
+                // Seed mob gallery
                 db.all('SELECT mob_id FROM mob_kills WHERE account_id=?', [accountId], function(err, rows){
-                    if (!err && rows && rows.length) {
-                        for (const r of rows) {
-                            try { _wasm_gallery_mark_for(ptr, r.mob_id|0); } catch(e) {}
+                    try {
+                        const len1 = lengthBytesUTF8(accountId) + 1;
+                        const ptr1 = _malloc(len1);
+                        stringToUTF8(accountId, ptr1, len1);
+                        if (!err && rows && rows.length) {
+                            for (const r of rows) {
+                                try { _wasm_gallery_mark_for(ptr1, r.mob_id|0); } catch(e) {}
+                            }
                         }
-                    }
-                    try { _wasm_send_gallery_for(ptr); } catch(e) {}
+                        try { _wasm_send_gallery_for(ptr1); } catch(e) {}
+                        _free(ptr1);
+                    } catch(e) {}
                 });
+                // Seed petal gallery
                 db.all('SELECT petal_id FROM petal_obtained WHERE account_id=?', [accountId], function(err, rows){
-                    if (!err && rows && rows.length) {
-                        for (const r of rows) {
-                            try { _wasm_petal_gallery_mark_for(ptr, r.petal_id|0); } catch(e) {}
+                    try {
+                        const len2 = lengthBytesUTF8(accountId) + 1;
+                        const ptr2 = _malloc(len2);
+                        stringToUTF8(accountId, ptr2, len2);
+                        if (!err && rows && rows.length) {
+                            for (const r of rows) {
+                                try { _wasm_petal_gallery_mark_for(ptr2, r.petal_id|0); } catch(e) {}
+                            }
                         }
-                    }
-                    try { _wasm_send_petal_gallery_for(ptr); } catch(e) {}
+                        try { _wasm_send_petal_gallery_for(ptr2); } catch(e) {}
+                        _free(ptr2);
+                    } catch(e) {}
                 });
-                _free(ptr);
             } catch(e) {}
         };
+
 
 
 
