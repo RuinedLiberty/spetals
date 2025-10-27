@@ -112,7 +112,7 @@ inline std::array const MAP_DATA = std::to_array<struct ZoneDefinition>({
             { MobID::kSquare, 1 }
         },
         .difficulty = 3,
-        .color = 0xff777777,
+        .color = 0xff4c5f56,
         .name = "???"
     }
 });

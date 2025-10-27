@@ -81,14 +81,10 @@ extern "C" void record_petal_obtained_js(const char *account_id_c, int petal_id)
     }, account_id_c, petal_id);
 }
 
-
-
-
 extern "C" void wasm_gallery_mark_for(const char *account_id_c, int mob_id) {
     if (!account_id_c) return;
     WasmAccountStore::set_bit(WasmAccountStore::Category::MobGallery, std::string(account_id_c), mob_id);
 }
-
 
 extern "C" void wasm_send_gallery_for(const char *account_id_c) {
     if (!account_id_c) return;
@@ -106,20 +102,8 @@ extern "C" void wasm_send_petal_gallery_for(const char *account_id_c) {
     Server::game.send_petal_gallery_to_account(std::string(account_id_c));
 }
 
-
-
-
-// -----------------------------------------------------------------------------
-// WebSocketServer runtime (Node.js via EM_ASM)
-// - HTTP endpoints: /, /gardn-client.js, /gardn-client.wasm, /auth/*, /api/*
-// - WS endpoint: handled by uWS bridge
-// - DB: SQLite with WAL + FULL + FK enforcement
-// -----------------------------------------------------------------------------
 WebSocketServer::WebSocketServer() {
     EM_ASM((function(){
-        // ---- Node runtime (injected) ----
-
-
         const WSS = require("ws");
 
         const http = require("http");
@@ -135,7 +119,6 @@ WebSocketServer::WebSocketServer() {
         Module.userActiveWs = Module.userActiveWs || new Map(); // discord_user_id -> ws_id
         Module.ws_connections = Module.ws_connections || {};
         Module.sessionByWs = Module.sessionByWs || new Map(); // ws_id -> discord_user_id
-
 
         // Discord config (prefer env, fallback to provided defaults)
         const DISCORD = {
@@ -158,7 +141,7 @@ WebSocketServer::WebSocketServer() {
             });
             return out;
         }
-                function setCookie(res, name, value, opts) {
+        function setCookie(res, name, value, opts) {
             opts = opts || {};
             let cookie = name + "=" + encodeURIComponent(value);
             if (opts.maxAge) cookie += "; Max-Age=" + Math.floor(opts.maxAge/1000);
@@ -172,7 +155,7 @@ WebSocketServer::WebSocketServer() {
         function makeToken() { return crypto.randomBytes(32).toString("hex"); }
 
 
-                // SQLite init (secure, single canonical path)
+        // SQLite init (secure, single canonical path)
         const ALLOW_INIT_DB = (process.env.ALLOW_INIT_DB === '1');
         var DB_PATH = process.env.SPETALS_DB_PATH || process.env.DB_PATH;
         if (!DB_PATH) {
@@ -286,11 +269,6 @@ WebSocketServer::WebSocketServer() {
             } catch(e) {}
         };
 
-
-
-
-
-
         async function exchangeCodeForToken(code, redirect_uri) {
             var params = new URLSearchParams();
             params.append("client_id", DISCORD.client_id);
@@ -352,7 +330,7 @@ WebSocketServer::WebSocketServer() {
                         if (!tokenResp.access_token) { res.writeHead(400).end("Auth failed"); return; }
                         var user = await fetchUser(tokenResp.access_token);
                         if (!user || !user.id) { res.writeHead(400).end("User fetch failed"); return; }
-                                                // upsert user into DB
+                        // upsert user into DB
                         const now = Date.now();
                         await new Promise(function(resolve, reject) {
                             db.run(
@@ -368,7 +346,7 @@ WebSocketServer::WebSocketServer() {
                                 if (err) reject(err); else resolve(row ? row.account_id : null);
                             });
                         });
-                                                if (!accountId) {
+                        if (!accountId) {
                             if (process.env.ALLOW_ACCOUNT_CREATE !== '1') {
                                 res.writeHead(500); res.end('Account linking disabled (ALLOW_ACCOUNT_CREATE != 1).'); return;
                             }
@@ -382,7 +360,7 @@ WebSocketServer::WebSocketServer() {
                             });
                         }
 
-                                                Module.accByDiscord.set(user.id, accountId);
+                        Module.accByDiscord.set(user.id, accountId);
                         // create persistent session in DB
                         const token = makeToken();
                         const createdAt = Math.floor(Date.now()/1000);
@@ -397,7 +375,7 @@ WebSocketServer::WebSocketServer() {
                         res.writeHead(500); res.end("OAuth Error"); return;
                     }
                 }
-                                if (req.url.startsWith("/auth/logout")) {
+                if (req.url.startsWith("/auth/logout")) {
                     const cookies = parseCookies(req.headers.cookie||"");
                     const tok = cookies[SESS_COOKIE];
                     if (tok) { try { db.run('UPDATE sessions SET revoked=1 WHERE id=?', [tok]); } catch(e) {} }
@@ -408,7 +386,7 @@ WebSocketServer::WebSocketServer() {
 
 
                 // API: minimal account info
-                                if (req.url.startsWith("/api/me")) {
+                if (req.url.startsWith("/api/me")) {
                     const cookies = parseCookies(req.headers.cookie||"");
                     const tok = cookies[SESS_COOKIE];
                     const row = tok ? await new Promise((resolve)=>{ db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [tok], function(err,row){ resolve(err?null:row); }); }) : null;
@@ -462,7 +440,7 @@ WebSocketServer::WebSocketServer() {
             console.log("Server running at http://localhost:" + port);
         });
         
-                // Automated backups
+        // Automated backups
         (function(){
             try {
                 const path = require('path');
@@ -491,7 +469,7 @@ WebSocketServer::WebSocketServer() {
 
 
         let curr_id = 0;
-                    wss.on("connection", function(ws, req) {
+            wss.on("connection", function(ws, req) {
             const ws_id = curr_id;
             Module.ws_connections[ws_id] = ws;
             curr_id = (curr_id + 1) | 0;
@@ -515,8 +493,16 @@ WebSocketServer::WebSocketServer() {
                         Module.sessionByWs.set(ws_id, link.discord_user_id);
                         // proceed with mapped account
                         const accountIdForConn = srow.account_id;
-                        const discordDisplay = (link.discord_user_id || 'unknown');
-                        console.log('Client connected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + discordDisplay);
+                        const discordId = (link.discord_user_id || 'unknown');
+                        // Lookup username if present in users table
+                        db.get('SELECT username FROM users WHERE discord_id=? LIMIT 1', [discordId], function(err3, row3){
+                            const username = (!err3 && row3 && row3.username) ? row3.username : '';
+                            if (username)
+                                console.log('Client connected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + discordId + ' (' + username + ')');
+                            else
+                                console.log('Client connected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + discordId);
+                        });
+
                         _on_connect(ws_id);
                         if (accountIdForConn) {
                             try {
@@ -541,7 +527,14 @@ WebSocketServer::WebSocketServer() {
                             if (uid && Module.userActiveWs.get(uid) === ws_id)
                                 Module.userActiveWs.delete(uid);
                             Module.sessionByWs.delete(ws_id);
-                            console.log('Client disconnected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + discordDisplay + ', code=' + reason);
+                            // Log with username if present
+                            db.get('SELECT username FROM users WHERE discord_id=? LIMIT 1', [discordId], function(err4, row4){
+                                const username = (!err4 && row4 && row4.username) ? row4.username : '';
+                                if (username)
+                                    console.log('Client disconnected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + discordId + ' (' + username + '), code=' + reason);
+                                else
+                                    console.log('Client disconnected: account_id=' + (accountIdForConn || 'unknown') + ', discord=' + discordId + ', code=' + reason);
+                            });
                             _on_disconnect(ws_id, reason);
                             delete Module.ws_connections[ws_id];
                         });
@@ -552,9 +545,6 @@ WebSocketServer::WebSocketServer() {
 
     })(), SERVER_PORT, INCOMING_BUFFER, MAX_BUFFER_LEN);
 }
-
-
-
 
 void Server::run() {
     EM_ASM({
@@ -590,7 +580,6 @@ bool ws_is_authenticated(int id) {
     return _ws_is_authenticated(id) != 0;
 }
 
-
 void WebSocket::end(int code, std::string const &message) {
     EM_ASM({
         if (!Module.ws_connections || !Module.ws_connections[$0]) return;
@@ -602,10 +591,6 @@ void WebSocket::end(int code, std::string const &message) {
 Client *WebSocket::getUserData() {
     return &client;
 }
-
-// extern "C" bool ws_is_authenticated(int id);
-
-
 
 WebSocketServer Server::server;
 #endif

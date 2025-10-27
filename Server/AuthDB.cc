@@ -64,6 +64,11 @@ bool init(const std::string &db_path) {
         "  created_at INTEGER NOT NULL,\n"
         "  FOREIGN KEY(account_id) REFERENCES accounts(id)\n"
         ");"
+        "CREATE TABLE IF NOT EXISTS users (\n"
+        "  discord_id TEXT PRIMARY KEY,\n"
+        "  username TEXT,\n"
+        "  created_at INTEGER\n"
+        ");"
         "CREATE TABLE IF NOT EXISTS sessions (\n"
         "  id TEXT PRIMARY KEY,\n"
         "  account_id TEXT NOT NULL,\n"
@@ -75,7 +80,6 @@ bool init(const std::string &db_path) {
         "  FOREIGN KEY(account_id) REFERENCES accounts(id)\n"
         ");"
         "CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id);"
-        // New: mob_kills table to track which mobs an account has killed
         "CREATE TABLE IF NOT EXISTS mob_kills (\n"
         "  account_id TEXT NOT NULL,\n"
         "  mob_id INTEGER NOT NULL,\n"
@@ -83,7 +87,6 @@ bool init(const std::string &db_path) {
         "  PRIMARY KEY (account_id, mob_id),\n"
         "  FOREIGN KEY(account_id) REFERENCES accounts(id)\n"
         ");"
-        // New: petal_obtained table to track which petals an account has obtained
         "CREATE TABLE IF NOT EXISTS petal_obtained (\n"
         "  account_id TEXT NOT NULL,\n"
         "  petal_id INTEGER NOT NULL,\n"
@@ -253,9 +256,7 @@ bool get_discord_username(const std::string &account_id, std::string &username_o
     if (!g_db) {
         if (!init("") ) return false;
     }
-    // We stored only discord_user_id; username changes on Discord are dynamic.
-    // If you prefer latest username, store it in a separate column via auth service on each login.
-    // For now, we will just return the discord_user_id as a stand-in.
+    // For backwards compatibility, return the discord_user_id if username table not present.
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(g_db, "SELECT discord_user_id FROM discord_links WHERE account_id=?1 LIMIT 1", -1, &stmt, nullptr) != SQLITE_OK) return false;
     sqlite3_bind_text(stmt, 1, account_id.c_str(), -1, SQLITE_STATIC);
@@ -269,6 +270,36 @@ bool get_discord_username(const std::string &account_id, std::string &username_o
     sqlite3_finalize(stmt);
     return false;
 }
+
+bool get_discord_info(const std::string &account_id, std::string &discord_id_out, std::string &username_out) {
+    discord_id_out.clear();
+    username_out.clear();
+    if (!g_db) { if (!init("") ) return false; }
+    // First get the discord id from the link
+    sqlite3_stmt *s1 = nullptr;
+    if (sqlite3_prepare_v2(g_db, "SELECT discord_user_id FROM discord_links WHERE account_id=?1 LIMIT 1", -1, &s1, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_text(s1, 1, account_id.c_str(), -1, SQLITE_STATIC);
+    int rc1 = sqlite3_step(s1);
+    if (rc1 == SQLITE_ROW) {
+        const char *did = reinterpret_cast<const char *>(sqlite3_column_text(s1, 0));
+        if (did) discord_id_out.assign(did);
+    }
+    sqlite3_finalize(s1);
+    if (discord_id_out.empty()) return false;
+    // Then try to fetch username from users table if present
+    sqlite3_stmt *s2 = nullptr;
+    if (sqlite3_prepare_v2(g_db, "SELECT username FROM users WHERE discord_id=?1 LIMIT 1", -1, &s2, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(s2, 1, discord_id_out.c_str(), -1, SQLITE_STATIC);
+        int rc2 = sqlite3_step(s2);
+        if (rc2 == SQLITE_ROW) {
+            const unsigned char *u = sqlite3_column_text(s2, 0);
+            if (u) username_out.assign(reinterpret_cast<const char *>(u));
+        }
+        sqlite3_finalize(s2);
+    }
+    return true;
+}
+
 
 bool record_mob_kill(const std::string &account_id, int mob_id) {
     if (!g_db) { if (!init("") ) return false; }

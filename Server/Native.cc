@@ -86,13 +86,18 @@ uWS::App Server::server = uWS::App({
         psd->client->ws = ws;
         // Store account id on Client for server-side logic/logging
         psd->client->account_id = std::string(psd->account_id);
-        // Fetch a friendly Discord display (we return discord_user_id for now)
-        std::string display;
+        // Fetch Discord id AND username (if available)
+        std::string discord_id; std::string username;
         if (!psd->client->account_id.empty()) {
-            AuthDB::get_discord_username(psd->client->account_id, display);
+            AuthDB::get_discord_info(psd->client->account_id, discord_id, username);
         }
-        if (display.empty()) display = "unknown";
-        std::cout << "Client connected: account_id=" << psd->client->account_id << ", discord=" << display << "\n";
+        if (discord_id.empty()) discord_id = "unknown";
+        if (username.empty()) username = "";
+        if (!username.empty())
+            std::cout << "Client connected: account_id=" << psd->client->account_id << ", discord=" << discord_id << " (" << username << ")\n";
+        else
+            std::cout << "Client connected: account_id=" << psd->client->account_id << ", discord=" << discord_id << "\n";
+
     },
     .message = [](auto *ws, std::string_view message, uWS::OpCode opCode) {
         Client::on_message(ws, message, opCode);

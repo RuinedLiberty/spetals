@@ -11,6 +11,9 @@
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
+#ifndef WASM_SERVER
+#include <Server/AuthDB.hh>
+#endif
 
 #include <array>
 #include <iostream>
@@ -178,17 +181,21 @@ void Client::on_disconnect(WebSocket *ws, int code, std::string_view message) {
     Client *client = ws->getUserData();
 #endif
     if (client == nullptr) return;
-    #ifndef WASM_SERVER
+        #ifndef WASM_SERVER
     // Log detailed disconnect info if available (native server)
     if (!client->account_id.empty()) {
-        std::cout << "Client disconnected: account_id=" << client->account_id << ", code=" << code << "\n";
+        std::string discord_id; std::string username;
+        AuthDB::get_discord_info(client->account_id, discord_id, username);
+        if (discord_id.empty()) discord_id = "unknown";
+        if (!username.empty())
+            std::cout << "Client disconnected: account_id=" << client->account_id << ", discord=" << discord_id << " (" << username << "), code=" << code << "\n";
+        else
+            std::cout << "Client disconnected: account_id=" << client->account_id << ", discord=" << discord_id << ", code=" << code << "\n";
     }
 #endif
 
     client->remove();
 }
-
-
 
 bool Client::check_invalid(bool valid) {
     if (valid) return false;
