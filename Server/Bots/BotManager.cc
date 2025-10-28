@@ -41,7 +41,7 @@ static BotState *find_state(EntityID camId) {
     return nullptr;
 }
 
-static void choose_new_roam_target(BotState &b, Simulation * /*sim*/) {
+static void choose_new_roam_target(BotState &b, Simulation *sim) {
     b.target_x = frand_s() * ARENA_WIDTH;
     b.target_y = frand_s() * ARENA_HEIGHT;
 }
@@ -57,7 +57,9 @@ static void ensure_has_player(Simulation *sim, Entity &cam) {
     player.set_nametag_visible(1);
 }
 
-static void try_pickup_visible_drop(Simulation * /*sim*/, Entity & /*player*/) {}
+static void try_pickup_visible_drop(Simulation *sim, Entity &player) {
+    (void)sim; (void)player;
+}
 
 } // anon
 
@@ -146,7 +148,6 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
     Entity &player = sim->get_ent(camera.get_player());
     BotState *bs = find_state(camera.id);
 
-    // Use player's position as the camera center immediately to avoid stale camera_x/y
     float half_w = 960.0f / camera.get_fov();
     float half_h = 540.0f / camera.get_fov();
     float cx = player.get_x();
@@ -154,20 +155,18 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
     camera.set_camera_x(cx);
     camera.set_camera_y(cy);
 
-    // Determine current target from decision (priority-controlled)
     EntityID best = NULL_ENTITY;
     if ((dec.type == Bots::Priority::Decision::Attack || dec.type == Bots::Priority::Decision::SeekHealMob) && sim->ent_alive(dec.target)) {
         best = dec.target;
     } else if (sim->ent_alive(player.target)) {
-        best = player.target; // keep current
+        best = player.target;
     } else {
-        // Fallback: first visible mob
         sim->spatial_hash.query(cx, cy, half_w + 50, half_h + 50, [&](Simulation *sm, Entity &e){
             if (!sm->ent_alive(e.id)) return;
             if (e.id == player.id) return;
             if (e.has_component(kMob) && !(e.get_team() == player.get_team())) {
                 if (fabsf(e.get_x() - cx) <= half_w && fabsf(e.get_y() - cy) <= half_h) {
-                    if (best.null()) best = e.id; // first seen
+                    if (best.null()) best = e.id;
                 }
             }
         });
@@ -180,13 +179,11 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
     bool attack = false; bool defend = false;
 
     if (dec.type == Bots::Priority::Decision::Loot && sim->ent_alive(dec.target)) {
-        // Movement-first for loot
         Entity &d = sim->get_ent(dec.target);
         Vector to(d.get_x() - player.get_x(), d.get_y() - player.get_y());
         to.set_magnitude(PLAYER_ACCELERATION);
         desired = to; attack = false; defend = false;
     } else if (!best.null()) {
-        // ... (combat movement exactly as in your existing code) ...
         Entity &t = sim->get_ent(best);
         Vector delta(t.get_x() - player.get_x(), t.get_y() - player.get_y());
         float dist = delta.magnitude();
@@ -250,7 +247,6 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
         desired = move + avoid;
         if (desired.magnitude() > PLAYER_ACCELERATION) desired.set_magnitude(PLAYER_ACCELERATION);
 
-        // tiny micro motion
         Vector micro;
         float microAngle = (float)player.lifetime * 0.37f / TPS + (player.id.id & 7);
         micro.unit_normal(microAngle).set_magnitude(PLAYER_ACCELERATION * 0.08f);
@@ -277,7 +273,7 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
             }
         }
     } else {
-        // Wander full speed, right-biased
+        // === PRIORITY 0.5: WANDER FULL SPEED, RIGHT-BIASED (≈60/40) ===
         float t = (float)player.lifetime / TPS;
         float theta = 0.9f * std::sin(0.8f * t + (player.id.id & 3))
                     + 0.4f * std::sin(1.7f * t + ((player.id.id>>2)&7));
@@ -285,35 +281,34 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
         Vector biased = randomUnit * 0.6f + Vector(1.0f, 0.0f) * 0.4f;
         if (biased.magnitude() < 1e-3f) { biased.set(1.0f, 0.0f); }
         biased.set_magnitude(PLAYER_ACCELERATION);
-        out_ctrl.ax = biased.x;
-        out_ctrl.ay = biased.y;
-        out_ctrl.flags = 0;
-        return;
+        desired = biased;
+        attack = false; defend = false;
     }
 
-    // Smooth, human-like accel (except wander)
     Vector prev; if (bs) prev.set(bs->out_ax, bs->out_ay); else prev.set(0,0);
     auto wrap_pi = [](float a){ while (a > M_PI) a -= 2*M_PI; while (a < -M_PI) a += 2*M_PI; return a; };
     Vector smoothed = desired;
 
-    float maxTurn = 0.28f;                         // rad per tick (~16 deg)
-    float maxStep = PLAYER_ACCELERATION * 0.25f;   // accel magnitude change per tick
-    float prevMag = prev.magnitude();
-    float desMag = desired.magnitude();
+    if (dec.type != Bots::Priority::Decision::Wander) {
+        float maxTurn = 0.28f;
+        float maxStep = PLAYER_ACCELERATION * 0.25f;
+        float prevMag = prev.magnitude();
+        float desMag = desired.magnitude();
 
-    if (prevMag > 0.01f && desMag > 0.01f) {
-        float a0 = prev.angle();
-        float a1 = desired.angle();
-        float dA = wrap_pi(a1 - a0);
-        float stepA = fclamp(dA, -maxTurn, maxTurn);
-        float newA = a0 + stepA;
-        float dMag = desMag - prevMag;
-        float stepMag = fclamp(dMag, -maxStep, maxStep);
-        float newMag = fclamp(prevMag + stepMag, 0.0f, PLAYER_ACCELERATION);
-        smoothed.unit_normal(newA).set_magnitude(newMag);
-    } else {
-        smoothed = prev * 0.6f + desired * 0.4f;
-        if (smoothed.magnitude() > PLAYER_ACCELERATION) smoothed.set_magnitude(PLAYER_ACCELERATION);
+        if (prevMag > 0.01f && desMag > 0.01f) {
+            float a0 = prev.angle();
+            float a1 = desired.angle();
+            float dA = wrap_pi(a1 - a0);
+            float stepA = fclamp(dA, -maxTurn, maxTurn);
+            float newA = a0 + stepA;
+            float dMag = desMag - prevMag;
+            float stepMag = fclamp(dMag, -maxStep, maxStep);
+            float newMag = fclamp(prevMag + stepMag, 0.0f, PLAYER_ACCELERATION);
+            smoothed.unit_normal(newA).set_magnitude(newMag);
+        } else {
+            smoothed = prev * 0.6f + desired * 0.4f;
+            if (smoothed.magnitude() > PLAYER_ACCELERATION) smoothed.set_magnitude(PLAYER_ACCELERATION);
+        }
     }
 
     out_ctrl.ax = smoothed.x;
