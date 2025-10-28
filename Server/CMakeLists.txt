@@ -22,6 +22,10 @@ set(SOURCES
     Process/Petal.cc
     Process/Score.cc
     Process/Segment.cc
+        Bots/BotManager.cc
+    Bots/Priorities.cc
+    Bots/ForwardShims.cc
+
     Client.cc
     Game.cc
     Main.cc
@@ -48,6 +52,7 @@ set(SOURCES
     ../Shared/Simulation.cc
     ../Shared/StaticData.cc
 )
+
 
 
 if(WASM_SERVER)

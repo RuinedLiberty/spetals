@@ -8,6 +8,9 @@
 extern uint32_t const MAX_LEVEL;
 extern uint32_t const TPS;
 
+// How many CPU-controlled player bots to spawn server-side
+extern uint32_t const BOT_COUNT;
+
 extern float const PETAL_DISABLE_DELAY;
 extern float const PLAYER_ACCELERATION;
 extern float const DEFAULT_FRICTION;
