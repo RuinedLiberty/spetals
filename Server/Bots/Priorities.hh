@@ -24,6 +24,10 @@ struct Decision {
     float score = 0.0f;
 };
 
+// Health ratios for behavior
+constexpr float LOW_HP = 0.45f; // below this, seek/equip heals
+constexpr float FULL_HP = 0.95f; // above this, revert heals to secondary
+
 // Compute the best next action for a bot given the current world state
 Decision evaluate(Context const &ctx);
 

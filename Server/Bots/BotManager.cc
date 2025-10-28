@@ -173,7 +173,8 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
 
     // Determine current target from decision (priority-controlled)
     EntityID best = NULL_ENTITY;
-    if (dec.type == Bots::Priority::Decision::Attack && sim->ent_alive(dec.target)) {
+    if ((dec.type == Bots::Priority::Decision::Attack || dec.type == Bots::Priority::Decision::SeekHealMob) && sim->ent_alive(dec.target)) {
+        // Prioritize explicit target (includes heal-dropping mob when low HP)
         best = dec.target;
     } else if (sim->ent_alive(player.target)) {
         best = player.target; // keep current
