@@ -7,6 +7,8 @@
 #include <Shared/Entity.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
+#include <Shared/Map.hh>
+
 
 #include <algorithm>
 #include <cmath>
@@ -51,7 +53,7 @@ static void ensure_has_player(Simulation *sim, Entity &cam) {
     Entity &player = alloc_player(sim, cam.get_team());
     player_spawn(sim, cam, player);
     static const char* names[] = {
-        "lily", "marigold", "petunia", "oakleaf", "fern", "thyme", "fleur", "hazel", "clover", "daisy"
+        "Killer x", "hi crazy", "interesting", "oakleaf", "Je suis caca", "Gator", "o", "no u", "gonziponzi", "Unnamed Flower", "hello there", "Quick Ripper", "AdE", "Miggy :D", "swarmd", "Murderer", "massiveazep1", "That one guy", "tu padre", "fatty", "that cool guy", "Akward", "aero", "Leafy", "Alma", "Amazon Box", "XxDEADxX", "jaceon", "Blur", "Blue", "nile", "i hateyouguys", "Willy Wonka", "boom", "you suck", "fuck ruined", "ANDER", "allergies", "deez nuts", "Lacros", "Amity", "FUCK U ALL", "team?", "SpareAetal?", "Hiss", "MT6621", "i am bored", "Bleach", "what me", "Narwhal sucks", "VENUS", "TRI STINGER", "Z fan", "Troll", "oof", "WARRIOR", "pls no", "Darjon", "hhhh", "flamel"
     };
     player.set_name(names[(uint32_t)(frand_s() * (sizeof(names)/sizeof(names[0])))]); // NOLINT
     player.set_nametag_visible(1);
@@ -155,24 +157,36 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
     camera.set_camera_x(cx);
     camera.set_camera_y(cy);
 
-    EntityID best = NULL_ENTITY;
+        EntityID best = NULL_ENTITY;
+
+    // Determine current zone overlevel status, to suppress targets from lower zones when appropriate
+    uint32_t player_level = score_to_level(player.get_score());
+    uint32_t current_zone = Map::get_zone_from_pos(player.get_x(), player.get_y());
+    uint32_t suitable_diff = Map::difficulty_at_level(player_level);
+    auto is_overleveled_for_zone = [&](uint32_t zone_idx)->bool {
+        return MAP_DATA[zone_idx].difficulty < suitable_diff;
+    };
+
     if ((dec.type == Bots::Priority::Decision::Attack || dec.type == Bots::Priority::Decision::SeekHealMob) && sim->ent_alive(dec.target)) {
         best = dec.target;
     } else if (sim->ent_alive(player.target)) {
         best = player.target;
-    } else {
+    } else if (dec.type != Bots::Priority::Decision::Evacuate) { // do not pick targets while evacuating
         sim->spatial_hash.query(cx, cy, half_w + 50, half_h + 50, [&](Simulation *sm, Entity &e){
             if (!sm->ent_alive(e.id)) return;
             if (e.id == player.id) return;
             if (e.has_component(kMob) && !(e.get_team() == player.get_team())) {
                 if (fabsf(e.get_x() - cx) <= half_w && fabsf(e.get_y() - cy) <= half_h) {
+                    uint32_t ez = Map::get_zone_from_pos(e.get_x(), e.get_y());
+                    // Skip targets in any zone that is overleveled for the bot
+                    if (is_overleveled_for_zone(ez)) return;
                     if (best.null()) best = e.id;
                 }
             }
         });
     }
 
-    if (!best.null()) { player.target = best; if (bs) bs->last_decide_ts = 0; }
+    if (!best.null() && dec.type != Bots::Priority::Decision::Evacuate) { player.target = best; if (bs) bs->last_decide_ts = 0; }
     else { player.target = NULL_ENTITY; if (bs) bs->last_decide_ts = 0; }
 
     Vector desired(0,0);
@@ -183,7 +197,13 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
         Vector to(d.get_x() - player.get_x(), d.get_y() - player.get_y());
         to.set_magnitude(PLAYER_ACCELERATION);
         desired = to; attack = false; defend = false;
+    } else if (dec.type == Bots::Priority::Decision::Evacuate) {
+        // Move to the right (toward higher zone indices). Slight vertical bias to stay near center.
+        desired.set(1.0f, (player.get_y() < ARENA_HEIGHT*0.45f ? 0.2f : (player.get_y() > ARENA_HEIGHT*0.55f ? -0.2f : 0.0f)));
+        desired.set_magnitude(PLAYER_ACCELERATION);
+        attack = false; defend = false;
     } else if (!best.null()) {
+
         Entity &t = sim->get_ent(best);
         Vector delta(t.get_x() - player.get_x(), t.get_y() - player.get_y());
         float dist = delta.magnitude();
@@ -289,7 +309,8 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
     auto wrap_pi = [](float a){ while (a > M_PI) a -= 2*M_PI; while (a < -M_PI) a += 2*M_PI; return a; };
     Vector smoothed = desired;
 
-    if (dec.type != Bots::Priority::Decision::Wander) {
+        if (dec.type != Bots::Priority::Decision::Wander && dec.type != Bots::Priority::Decision::Evacuate) {
+
         float maxTurn = 0.28f;
         float maxStep = PLAYER_ACCELERATION * 0.25f;
         float prevMag = prev.magnitude();

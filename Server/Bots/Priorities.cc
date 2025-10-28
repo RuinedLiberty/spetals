@@ -3,6 +3,8 @@
 #include <cmath>
 #include <vector>
 #include <unordered_map>
+#include <Shared/Map.hh>
+
 
 namespace Bots { namespace Priority {
 
@@ -115,7 +117,20 @@ Decision evaluate(Context const &ctx) {
 
     float hpRatio = ctx.player.health / std::max(1.0f, ctx.player.max_health);
 
-    // Priority 4: Low HP healing
+    // Priority 10: If overleveled for current zone, evacuate to the next zone (move right) and do not target/loot in this zone
+    uint32_t player_level = score_to_level(ctx.player.get_score());
+    uint32_t current_zone = Map::get_zone_from_pos(ctx.player.get_x(), ctx.player.get_y());
+    uint32_t current_diff = MAP_DATA[current_zone].difficulty;
+    uint32_t suitable_diff = Map::difficulty_at_level(player_level);
+    bool overleveled_here = (current_diff < suitable_diff);
+    if (overleveled_here) {
+        d.type = Decision::Evacuate;
+        d.target = NULL_ENTITY;
+        d.score = 10.0f;
+        return d;
+    }
+
+        // Priority 4: Low HP healing
     if (hpRatio < LOW_HP) {
         // 4a) If a healing petal drop is visible, go loot it (score 4)
         EntityID healDrop = NULL_ENTITY; float bestD2H = 0.0f;
@@ -129,8 +144,13 @@ Decision evaluate(Context const &ctx) {
 
         // 4b) Otherwise, seek mobs likely to drop heals (score 4)
         EntityID healMob = NULL_ENTITY; float bestD2M = 0.0f; uint8_t bestMinRarity = 0;
+        // Determine suitable difficulty to avoid targeting mobs in overleveled zones
+        uint32_t player_level_l = score_to_level(ctx.player.get_score());
+        uint32_t suitable_diff_l = Map::difficulty_at_level(player_level_l);
         ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 150, ctx.half_h + 150, [&](Simulation *sm, Entity &e){
             if (!sm->ent_alive(e.id)) return; if (!e.has_component(kMob)) return; if (!in_fov(ctx, e)) return;
+            uint32_t ez = Map::get_zone_from_pos(e.get_x(), e.get_y());
+            if (MAP_DATA[ez].difficulty < suitable_diff_l) return; // skip mobs in overleveled zones
             auto const &md = MOB_DATA[e.get_mob_id()];
             uint8_t minHealRarity = 255; bool dropsHeal = false;
             for (uint32_t i=0;i<MAX_DROPS_PER_MOB;++i) {
@@ -145,6 +165,7 @@ Decision evaluate(Context const &ctx) {
         });
         if (!healMob.null()) { d.type = Decision::SeekHealMob; d.target = healMob; d.score = 4.0f; return d; }
     }
+
 
     // FULL HP and heal in main (excluding Leaf): pursue any visible damage drop (prefer dmg > Rose)
     if (hpRatio >= FULL_HP && has_heal_in_main_excl_leaf(ctx.player)) {
@@ -202,18 +223,24 @@ Decision evaluate(Context const &ctx) {
         if (!dmgDrop.null()) { d.type = Decision::Loot; d.target = dmgDrop; d.score = 2.0f; return d; }
     }
 
-    // Rule 1: If bot isn't doing anything, attack the closest visible mob, value = 1
+        // Rule 1: If bot isn't doing anything, attack the closest visible mob, value = 1
     EntityID closest = NULL_ENTITY; float bestDist2 = 0.0f;
+    uint32_t player_level_r1 = score_to_level(ctx.player.get_score());
+    uint32_t suitable_diff_r1 = Map::difficulty_at_level(player_level_r1);
     ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
         if (!sm->ent_alive(e.id)) return; if (!e.has_component(kMob)) return; if (e.get_team() == ctx.player.get_team()) return; if (!in_fov(ctx, e)) return;
+        uint32_t ez = Map::get_zone_from_pos(e.get_x(), e.get_y());
+        if (MAP_DATA[ez].difficulty < suitable_diff_r1) return; // don't target mobs in overleveled zones
         float dx = e.get_x() - ctx.player.get_x(); float dy = e.get_y() - ctx.player.get_y(); float d2 = dx*dx + dy*dy;
         if (closest.null() || d2 < bestDist2) { closest = e.id; bestDist2 = d2; }
     });
     if (!closest.null()) { d.type = Decision::Attack; d.target = closest; d.score = 1.0f; return d; }
 
+
     // Priority 0.5: Wander if no mobs/loot targets; move generally rightward, full speed
     d.type = Decision::Wander; d.score = 0.5f; return d;
 }
+
 
 void apply_rearrange(Context &ctx) {
     uint8_t mainN = ctx.player.get_loadout_count();

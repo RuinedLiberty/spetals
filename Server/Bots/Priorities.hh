@@ -19,7 +19,8 @@ struct Context {
 };
 
 struct Decision {
-    enum Type { None, Attack, Loot, Rearrange, SeekHealMob, Wander } type = None;
+    // Evacuate: highest priority when overleveled for current zone; move to the next zone (to the right)
+    enum Type { None, Attack, Loot, Rearrange, SeekHealMob, Wander, Evacuate } type = None;
     EntityID target = NULL_ENTITY; // mob or drop id depending on type
     float score = 0.0f;
 };
@@ -49,3 +50,4 @@ bool is_damage_petal(PetalID::T id);
 
 } // namespace Priority
 } // namespace Bots
+
