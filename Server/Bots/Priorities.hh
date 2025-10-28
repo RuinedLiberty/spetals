@@ -32,7 +32,7 @@ constexpr float FULL_HP = 0.95f; // above this, revert heals to secondary
 Decision evaluate(Context const &ctx);
 
 // Carry out inventory rearrangement policy:
-// - If low HP and healing is present in secondary, bring it to main
+// - If low HP and healing is present in secondary, bring it to main (now probabilistically multiple)
 // - When healthy, move pure-heal petals to secondary, prefer replacing them with
 //   petals whose damage strictly exceeds the heal’s damage (Rose ≈ 5).
 //   Then probabilistically trash excess pure-heals in secondary.

@@ -163,6 +163,7 @@ Decision evaluate(Context const &ctx) {
                 if (strongDrop.null() || d2 < strongD2) { strongDrop = e.id; strongD2 = d2; }
             }
             // Track nearest any damage
+            // BUGFIX: compare d2 against anyD2 (float), not anyDmgDrop (EntityID)
             if (anyDmgDrop.null() || d2 < anyD2) { anyDmgDrop = e.id; anyD2 = d2; }
         });
 
@@ -226,37 +227,97 @@ void apply_rearrange(Context &ctx) {
     HealPhaseState &hs = g_heal_state[ctx.player.id.id];
     if (hpRatio < LOW_HP) { hs.was_low = true; hs.cleanup_done = false; }
 
-    // Priority 4 (inventory while low HP): equip healing in main without trashing the replaced petal
+    // ============================
+    // Priority 4 (LOW HP): Probabilistic MULTI-EQUIP of pure-heals from secondary
+    // ============================
     if (hpRatio < LOW_HP) {
-        int heal_j = -1;
+        // Collect pure-heals in secondary (Rose etc.)
+        std::vector<uint8_t> heals;
+        heals.reserve(MAX_SLOT_COUNT);
         for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) {
-            PetalID::T sid = ctx.player.get_loadout_ids(secStart + j);
-            if (is_heal_only(sid)) { heal_j = (int)j; break; }
+            uint8_t idx = secStart + j;
+            PetalID::T sid = ctx.player.get_loadout_ids(idx);
+            if (is_pure_heal(sid)) heals.push_back(idx);
         }
-        if (heal_j >= 0) {
-            // Choose replacement slot in main: lowest rarity; if tie, prefer ranged; else lowest damage
-            uint8_t rep_i = 0; uint8_t rep_r = 255; float rep_dmg = 1e9f; bool rep_is_ranged = false;
-            for (uint8_t i=0;i<mainN;++i) {
-                PetalID::T mid = ctx.player.get_loadout_ids(i);
-                uint8_t r = r_of(mid);
-                float dmg = damage_of(mid);
-                bool rng = is_ranged(mid);
-                if (r < rep_r || (r == rep_r && (rng && !rep_is_ranged)) || (r == rep_r && rng == rep_is_ranged && dmg < rep_dmg)) {
-                    rep_i = i; rep_r = r; rep_dmg = dmg; rep_is_ranged = rng;
+
+        if (!heals.empty()) {
+            auto pick_replacement_slot = [&](void)->int {
+                // Choose replacement slot in main: lowest rarity; tie → prefer ranged; tie → lowest damage.
+                // Also: avoid replacing existing pure-heal in main (no-op).
+                int rep_i = -1; uint8_t rep_r = 255; float rep_dmg = 1e9f; bool rep_is_ranged = false;
+                for (uint8_t i=0;i<mainN;++i) {
+                    PetalID::T mid = ctx.player.get_loadout_ids(i);
+                    if (is_pure_heal(mid)) continue; // keep existing pure-heals
+                    uint8_t r = r_of(mid);
+                    float dmg = damage_of(mid);
+                    bool rng = is_ranged(mid);
+                    if (r < rep_r ||
+                       (r == rep_r && (rng && !rep_is_ranged)) ||
+                       (r == rep_r && rng == rep_is_ranged && dmg < rep_dmg)) {
+                        rep_i = (int)i; rep_r = r; rep_dmg = dmg; rep_is_ranged = rng;
+                    }
+                }
+                return rep_i;
+            };
+
+            auto equip_one = [&](uint8_t heal_idx)->bool {
+                int rep_i = pick_replacement_slot();
+                if (rep_i < 0) return false; // no non-heal slot left to replace
+                PetalID::T heal = ctx.player.get_loadout_ids(heal_idx);
+                PetalID::T replaced = ctx.player.get_loadout_ids((uint8_t)rep_i);
+                ctx.player.set_loadout_ids((uint8_t)rep_i, heal);
+                ctx.player.set_loadout_ids(heal_idx, replaced);
+                return true;
+            };
+
+            // Probabilities per order
+            for (size_t k=0; k<heals.size(); ++k) {
+                float chance = 0.05f;               // default for 5th+
+                if (k == 0) chance = 1.00f;         // 1st heal
+                else if (k == 1) chance = 0.50f;    // 2nd
+                else if (k == 2) chance = 0.25f;    // 3rd
+                else if (k == 3) chance = 0.10f;    // 4th
+
+                if (frand() <= chance) {
+                    // After each swap, this secondary slot might now hold the replaced (non-heal) petal.
+                    // That’s fine—subsequent iterations will ignore it because it’s no longer pure-heal.
+                    equip_one(heals[k]);
                 }
             }
-            uint8_t idx = secStart + (uint8_t)heal_j;
-            PetalID::T replaced = ctx.player.get_loadout_ids(rep_i);
-            PetalID::T heal = ctx.player.get_loadout_ids(idx);
-            ctx.player.set_loadout_ids(rep_i, heal);
-            ctx.player.set_loadout_ids(idx, replaced);
-            return;
+            // Do not 'return' here—let other low-HP logic happen in future ticks.
+        } else {
+            // Fallback: legacy single-heal equip if only generic "heals-only" exist
+            int heal_j = -1;
+            for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) {
+                PetalID::T sid = ctx.player.get_loadout_ids(secStart + j);
+                if (is_heal_only(sid)) { heal_j = (int)j; break; }
+            }
+            if (heal_j >= 0) {
+                // Choose replacement slot in main
+                uint8_t rep_i = 0; uint8_t rep_r = 255; float rep_dmg = 1e9f; bool rep_is_ranged = false;
+                for (uint8_t i=0;i<mainN;++i) {
+                    PetalID::T mid = ctx.player.get_loadout_ids(i);
+                    if (is_pure_heal(mid)) continue; // don't replace existing pure-heal
+                    uint8_t r = r_of(mid);
+                    float dmg = damage_of(mid);
+                    bool rng = is_ranged(mid);
+                    if (r < rep_r || (r == rep_r && (rng && !rep_is_ranged)) ||
+                        (r == rep_r && rng == rep_is_ranged && dmg < rep_dmg)) {
+                        rep_i = i; rep_r = r; rep_dmg = dmg; rep_is_ranged = rng;
+                    }
+                }
+                uint8_t idx = secStart + (uint8_t)heal_j;
+                PetalID::T replaced = ctx.player.get_loadout_ids(rep_i);
+                PetalID::T heal = ctx.player.get_loadout_ids(idx);
+                ctx.player.set_loadout_ids(rep_i, heal);
+                ctx.player.set_loadout_ids(idx, replaced);
+            }
         }
     }
 
-    // Priority 4 (inventory while FULL HP):
-    // For EACH pure-heal in main, prefer swapping in a secondary petal whose damage > the heal’s damage.
-    // For Rose specifically, we use rose_damage_threshold() (~5).
+    // ============================
+    // Priority 4 (FULL HP): move pure-heals out of main
+    // ============================
     if (hpRatio >= FULL_HP) {
         for (uint8_t i=0;i<mainN;++i) {
             PetalID::T mid = ctx.player.get_loadout_ids(i);
