@@ -3,6 +3,7 @@
 #include <cmath>
 #include <vector>
 #include <unordered_map>
+#include <algorithm>  // for sort
 
 namespace Bots { namespace Priority {
 
@@ -43,6 +44,14 @@ static inline bool has_basic(Entity const &player) {
     return false;
 }
 
+// Strictly check Basic in MAIN only
+static inline bool has_basic_in_main(Entity const &player) {
+    uint8_t N = player.get_loadout_count();
+    for (uint8_t i=0;i<N;++i)
+        if (player.get_loadout_ids(i) == PetalID::kBasic) return true;
+    return false;
+}
+
 // Convenience
 static inline bool is_rose(PetalID::T id) { return id == PetalID::kRose; }
 static inline float rose_damage_threshold() {
@@ -51,8 +60,6 @@ static inline float rose_damage_threshold() {
 }
 
 // --- PURE HEAL definition (broadened) ---
-// "Pure heal" = heals AND has negligible damage (treat tiny incidental damage as zero).
-// Also explicitly treat Rose as pure-heal to match design intent.
 static inline bool is_pure_heal(PetalID::T id) {
     if (id == PetalID::kNone) return false;
     auto const &pd = PETAL_DATA[id];
@@ -60,8 +67,8 @@ static inline bool is_pure_heal(PetalID::T id) {
     float dmg = damage_of(id);
     if (!heals) return false;
 
-    if (is_rose(id)) return true;          // explicitly pure-heal behaviorally
-    return (dmg < 0.5f);                   // tolerate tiny non-zero damage
+    if (is_rose(id)) return true;   // explicitly pure-heal behaviorally
+    return (dmg < 0.5f);            // tolerate tiny non-zero damage
 }
 
 static inline bool has_heal_in_main_excl_leaf(Entity const &player) {
@@ -74,9 +81,7 @@ static inline bool has_heal_in_main_excl_leaf(Entity const &player) {
     return false;
 }
 
-struct HealPhaseState { bool was_low = false; bool cleanup_done = false; };
-static std::unordered_map<uint16_t, HealPhaseState> g_heal_state;
-
+// NEW: check for any pure-heal in MAIN (Leaf ignored)
 static inline bool main_has_pure_heal(Entity const &player) {
     uint8_t N = player.get_loadout_count();
     for (uint8_t i=0;i<N;++i) {
@@ -86,6 +91,19 @@ static inline bool main_has_pure_heal(Entity const &player) {
     }
     return false;
 }
+
+static inline int count_pure_heals_in_main(Entity const &player) {
+    int cnt = 0; uint8_t N = player.get_loadout_count();
+    for (uint8_t i=0;i<N;++i) {
+        PetalID::T pid = player.get_loadout_ids(i);
+        if (pid == PetalID::kLeaf) continue;
+        if (is_pure_heal(pid)) ++cnt;
+    }
+    return cnt;
+}
+
+struct HealPhaseState { bool was_low = false; bool cleanup_done = false; };
+static std::unordered_map<uint16_t, HealPhaseState> g_heal_state;
 
 // Helper: pick the best secondary slot whose damage strictly exceeds a threshold
 static int pick_best_secondary_damage_slot(Entity const &player, uint8_t secStart, float threshold) {
@@ -108,6 +126,77 @@ static int pick_any_reasonable_swapin(Entity const &player, uint8_t secStart) {
         if (is_damage_petal(sid) || sid == PetalID::kLeaf || sid == PetalID::kBasic) return (int)j;
     }
     return -1;
+}
+
+// --- XP trashing helpers ---
+static inline bool is_protected_secondary(PetalID::T sid, uint8_t worst_main_rarity) {
+    if (sid == PetalID::kNone) return true; // nothing to do
+    if (sid == PetalID::kLeaf) return true; // keep utility
+    if (is_pure_heal(sid)) return true;     // heals (Rose cleanup handles them)
+    if (rarity_of(sid) > worst_main_rarity) return true; // could upgrade main later
+    return false;
+}
+
+// compute reserved swap-ins from secondary for future heal removal.
+// Reserve up to 'needed' best DAMAGE petals (by rarity, then damage).
+static void compute_reserved_swapins(Entity const &player, uint8_t secStart, int needed, bool reserved[MAX_SLOT_COUNT]) {
+    for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) reserved[j] = false;
+    if (needed <= 0) return;
+
+    struct Cand { int j; uint8_t r; float dmg; };
+    std::vector<Cand> cands; cands.reserve(MAX_SLOT_COUNT);
+
+    for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) {
+        PetalID::T sid = player.get_loadout_ids(secStart + j);
+        if (sid == PetalID::kNone) continue;
+        if (!is_damage_petal(sid)) continue;       // only damage petals are useful to replace heals
+        cands.push_back({ (int)j, rarity_of(sid), damage_of(sid) });
+    }
+
+    if (cands.empty()) return;
+
+    std::sort(cands.begin(), cands.end(), [](Cand const &a, Cand const &b){
+        if (a.r != b.r) return a.r > b.r;          // higher rarity first
+        if (a.dmg != b.dmg) return a.dmg > b.dmg;  // then higher damage
+        return a.j < b.j;
+    });
+
+    int keep = std::min<int>(needed, (int)cands.size());
+    for (int k=0;k<keep;++k) reserved[cands[k].j] = true;
+}
+
+static int pick_lowest_rarity_trash_slot(Entity const &player, uint8_t secStart, uint8_t worst_main_rarity) {
+    int best_j = -1; uint8_t best_r = 255; float best_dmg = 1e9f;
+    for (uint8_t j=0; j<MAX_SLOT_COUNT; ++j) {
+        uint8_t idx = secStart + j;
+        PetalID::T sid = player.get_loadout_ids(idx);
+        if (sid == PetalID::kNone) continue;
+        if (is_protected_secondary(sid, worst_main_rarity)) continue;
+        uint8_t r = rarity_of(sid);
+        float dmg = damage_of(sid);
+        if (r < best_r || (r == best_r && dmg < best_dmg)) {
+            best_r = r; best_dmg = dmg; best_j = (int)j;
+        }
+    }
+    return best_j;
+}
+
+// trash picker that *also* respects a reserved mask
+static int pick_lowest_rarity_trash_slot_reserve(Entity const &player, uint8_t secStart, uint8_t worst_main_rarity, bool const reserved[MAX_SLOT_COUNT]) {
+    int best_j = -1; uint8_t best_r = 255; float best_dmg = 1e9f;
+    for (uint8_t j=0; j<MAX_SLOT_COUNT; ++j) {
+        if (reserved[j]) continue; // do not trash reserved future swap-ins
+        uint8_t idx = secStart + j;
+        PetalID::T sid = player.get_loadout_ids(idx);
+        if (sid == PetalID::kNone) continue;
+        if (is_protected_secondary(sid, worst_main_rarity)) continue;
+        uint8_t r = rarity_of(sid);
+        float dmg = damage_of(sid);
+        if (r < best_r || (r == best_r && dmg < best_dmg)) {
+            best_r = r; best_dmg = dmg; best_j = (int)j;
+        }
+    }
+    return best_j;
 }
 
 Decision evaluate(Context const &ctx) {
@@ -158,12 +247,9 @@ Decision evaluate(Context const &ctx) {
 
             float dx = e.get_x() - ctx.player.get_x(); float dy = e.get_y() - ctx.player.get_y(); float d2 = dx*dx + dy*dy;
 
-            // Track nearest damage->Rose upgrade
             if (damage_of(pid) > thr) {
                 if (strongDrop.null() || d2 < strongD2) { strongDrop = e.id; strongD2 = d2; }
             }
-            // Track nearest any damage
-            // BUGFIX: compare d2 against anyD2 (float), not anyDmgDrop (EntityID)
             if (anyDmgDrop.null() || d2 < anyD2) { anyDmgDrop = e.id; anyD2 = d2; }
         });
 
@@ -171,7 +257,7 @@ Decision evaluate(Context const &ctx) {
         if (!anyDmgDrop.null()) { d.type = Decision::Loot; d.target = anyDmgDrop; d.score = 4.0f; return d; }
     }
 
-    // Priority 3: If any visible drop has rarity higher than the lowest rarity in main, go loot it (score 3)
+    // Priority 3: Rarity upgrade over worst main
     uint8_t N = ctx.player.get_loadout_count();
     uint8_t worst = 255; for (uint8_t i=0;i<N;++i) worst = std::min<uint8_t>(worst, rarity_of(ctx.player.get_loadout_ids(i)));
     EntityID bestDrop = NULL_ENTITY; uint8_t bestR = 0; float bestD2 = 0.0f;
@@ -190,7 +276,7 @@ Decision evaluate(Context const &ctx) {
     });
     if (!bestDrop.null()) { d.type = Decision::Loot; d.target = bestDrop; d.score = 3.0f; return d; }
 
-    // Priority 2: If bot sees any damage petal on ground and has Basic in inventory, go loot it (score 2)
+    // Priority 2: Replace Basics with any damage
     if (has_basic(ctx.player)) {
         EntityID dmgDrop = NULL_ENTITY; float bestD2b = 0.0f;
         ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
@@ -202,7 +288,42 @@ Decision evaluate(Context const &ctx) {
         if (!dmgDrop.null()) { d.type = Decision::Loot; d.target = dmgDrop; d.score = 2.0f; return d; }
     }
 
-    // Rule 1: If bot isn't doing anything, attack the closest visible mob, value = 1
+    // Priority 1.5: XP trashing — loot low-rarity petals we would never use (to trash)
+    // Skip XP mode entirely while Basics remain in MAIN.
+    if (!has_basic_in_main(ctx.player)) {
+        uint8_t Nloc = ctx.player.get_loadout_count();
+        uint8_t worst_main = 255;
+        for (uint8_t i=0;i<Nloc;++i) worst_main = std::min<uint8_t>(worst_main, rarity_of(ctx.player.get_loadout_ids(i)));
+
+        const bool currently_would_swap_heals = has_heal_in_main_excl_leaf(ctx.player);
+
+        EntityID trashDrop = NULL_ENTITY; float trashD2 = 0.0f;
+        ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
+            if (!sm->ent_alive(e.id)) return;
+            if (!e.has_component(kDrop)) return;
+            if (!in_fov(ctx, e)) return;
+
+            PetalID::T pid = e.get_drop_id();
+            if (pid == PetalID::kNone) return;
+            if (is_pure_heal(pid)) return;       // never farm heals for trashing
+            if (pid == PetalID::kLeaf) return;   // keep utility petals off the trash route
+
+            uint8_t r = rarity_of(pid);
+            // Skip anything we might want later (upgrade)…
+            if (r > worst_main) return;
+            // …or that we'd use to replace heals ONLY if we actually have a heal in main right now.
+            if (currently_would_swap_heals && is_damage_petal(pid) && damage_of(pid) > rose_damage_threshold()) return;
+
+            float dx = e.get_x() - ctx.player.get_x();
+            float dy = e.get_y() - ctx.player.get_y();
+            float d2 = dx*dx + dy*dy;
+            if (trashDrop.null() || d2 < trashD2) { trashDrop = e.id; trashD2 = d2; }
+        });
+
+        if (!trashDrop.null()) { d.type = Decision::Loot; d.target = trashDrop; d.score = 1.5f; return d; }
+    }
+
+    // Rule 1: If nothing else, attack nearest visible mob
     EntityID closest = NULL_ENTITY; float bestDist2 = 0.0f;
     ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
         if (!sm->ent_alive(e.id)) return; if (!e.has_component(kMob)) return; if (e.get_team() == ctx.player.get_team()) return; if (!in_fov(ctx, e)) return;
@@ -211,7 +332,7 @@ Decision evaluate(Context const &ctx) {
     });
     if (!closest.null()) { d.type = Decision::Attack; d.target = closest; d.score = 1.0f; return d; }
 
-    // Priority 0.5: Wander if no mobs/loot targets; move generally rightward, full speed
+    // Priority 0.5: Wander
     d.type = Decision::Wander; d.score = 0.5f; return d;
 }
 
@@ -226,6 +347,39 @@ void apply_rearrange(Context &ctx) {
     // Track heal phase transitions for one-time cleanup behavior
     HealPhaseState &hs = g_heal_state[ctx.player.id.id];
     if (hpRatio < LOW_HP) { hs.was_low = true; hs.cleanup_done = false; }
+
+    // ============================
+    // BASIC PURGE (runs before any XP trashing)
+    // ============================
+    for (uint8_t i=0;i<mainN;++i) {
+        if (ctx.player.get_loadout_ids(i) != PetalID::kBasic) continue;
+
+        // pick best secondary replacement: prefer damage; else Leaf; never pure-heal; never None; never Basic.
+        int best_j = -1; float best_dmg = -0.1f; bool best_is_leaf = false;
+        for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) {
+            uint8_t idx = secStart + j;
+            PetalID::T sid = ctx.player.get_loadout_ids(idx);
+            if (sid == PetalID::kNone) continue;
+            if (sid == PetalID::kBasic) continue;
+            if (is_pure_heal(sid)) continue;
+            bool leaf = (sid == PetalID::kLeaf);
+            float dmg = is_damage_petal(sid) ? damage_of(sid) : 0.0f;
+
+            bool better =
+                (dmg > best_dmg) ||
+                (!leaf && best_is_leaf && dmg == best_dmg) ||
+                (best_dmg < 0.0f && leaf);
+            if (better) { best_j = (int)j; best_dmg = dmg; best_is_leaf = leaf; }
+        }
+
+        if (best_j >= 0) {
+            uint8_t sidx = secStart + (uint8_t)best_j;
+            PetalID::T repl = ctx.player.get_loadout_ids(sidx); // non–pure-heal
+            ctx.player.set_loadout_ids((uint8_t)i, repl);
+            ctx.player.set_loadout_ids(sidx, PetalID::kNone);   // trash the Basic we displaced
+            return; // one change per tick
+        }
+    }
 
     // ============================
     // Priority 4 (LOW HP): Probabilistic MULTI-EQUIP of pure-heals from secondary
@@ -279,8 +433,6 @@ void apply_rearrange(Context &ctx) {
                 else if (k == 3) chance = 0.10f;    // 4th
 
                 if (frand() <= chance) {
-                    // After each swap, this secondary slot might now hold the replaced (non-heal) petal.
-                    // That’s fine—subsequent iterations will ignore it because it’s no longer pure-heal.
                     equip_one(heals[k]);
                 }
             }
@@ -366,6 +518,102 @@ void apply_rearrange(Context &ctx) {
         }
     }
 
+    // ============================
+    // XP MODE (no Basics in MAIN):
+    // trash unneeded low-rarity petals in secondary,
+    // free space if a desirable ground drop exists,
+    // and **reserve** enough damage petals to swap heals out later.
+    // ============================
+    if (!has_basic_in_main(ctx.player)) {
+        // Compute worst main rarity once
+        uint8_t worst_main = 255;
+        for (uint8_t i=0;i<mainN;++i) worst_main = std::min<uint8_t>(worst_main, rarity_of(ctx.player.get_loadout_ids(i)));
+
+        const bool currently_would_swap_heals = has_heal_in_main_excl_leaf(ctx.player);
+
+        // Build reserved mask for future heal removal
+        bool reserved[MAX_SLOT_COUNT]{};   // false init
+        if (currently_would_swap_heals) {
+            int heals_in_main = count_pure_heals_in_main(ctx.player);
+            compute_reserved_swapins(ctx.player, secStart, heals_in_main, reserved);
+        }
+
+        // Determine if secondary is full
+        bool secondary_full = true;
+        for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) {
+            if (ctx.player.get_loadout_ids(secStart + j) == PetalID::kNone) { secondary_full = false; break; }
+        }
+
+        // Decide if there is any "desirable" ground drop in view
+        bool want_ground = false;
+        // a) low HP → any heal-only drop
+        if (!want_ground && hpRatio < LOW_HP) {
+            ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
+                if (!sm->ent_alive(e.id)) return;
+                if (!in_fov(ctx, e) || !e.has_component(kDrop)) return;
+                PetalID::T pid = e.get_drop_id(); if (pid == PetalID::kNone) return;
+                if (is_heal_only(pid)) want_ground = true;
+            });
+        }
+        // b) FULL HP w/ heal in main → any damage drop
+        if (!want_ground && hpRatio >= FULL_HP && has_heal_in_main_excl_leaf(ctx.player)) {
+            ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
+                if (!sm->ent_alive(e.id)) return;
+                if (!in_fov(ctx, e) || !e.has_component(kDrop)) return;
+                PetalID::T pid = e.get_drop_id(); if (pid == PetalID::kNone) return;
+                if (is_damage_petal(pid)) want_ground = true;
+            });
+        }
+        // c) Rarity upgrade present
+        if (!want_ground) {
+            ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
+                if (!sm->ent_alive(e.id)) return;
+                if (!in_fov(ctx, e) || !e.has_component(kDrop)) return;
+                PetalID::T pid = e.get_drop_id(); if (pid == PetalID::kNone) return;
+                if (rarity_of(pid) > worst_main) want_ground = true;
+            });
+        }
+        // d) Basic replacement present
+        if (!want_ground && has_basic(ctx.player)) {
+            ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
+                if (!sm->ent_alive(e.id)) return;
+                if (!in_fov(ctx, e) || !e.has_component(kDrop)) return;
+                PetalID::T pid = e.get_drop_id(); if (pid == PetalID::kNone) return;
+                if (is_damage_petal(pid)) want_ground = true;
+            });
+        }
+        // e) XP trashing candidate present (1.5)
+        if (!want_ground) {
+            ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
+                if (!sm->ent_alive(e.id)) return;
+                if (!in_fov(ctx, e) || !e.has_component(kDrop)) return;
+                PetalID::T pid = e.get_drop_id(); if (pid == PetalID::kNone) return;
+                if (is_pure_heal(pid) || pid == PetalID::kLeaf) return;
+                uint8_t r = rarity_of(pid);
+                if (r > worst_main) return;
+                if (currently_would_swap_heals && is_damage_petal(pid) && damage_of(pid) > rose_damage_threshold()) return;
+                want_ground = true;
+            });
+        }
+
+        // (1) Background unclog respecting reservation
+        {
+            int tr_j = pick_lowest_rarity_trash_slot_reserve(ctx.player, secStart, worst_main, reserved);
+            if (tr_j >= 0) {
+                ctx.player.set_loadout_ids(secStart + (uint8_t)tr_j, PetalID::kNone);
+                // do only one per call
+            }
+        }
+
+        // (2) If we want a ground drop and secondary is full, free one slot (never trash reserved/pure-heals/Leaf or upgrades)
+        if (want_ground && secondary_full) {
+            int tr_j = pick_lowest_rarity_trash_slot_reserve(ctx.player, secStart, worst_main, reserved);
+            if (tr_j >= 0) {
+                ctx.player.set_loadout_ids(secStart + (uint8_t)tr_j, PetalID::kNone);
+            }
+        }
+    }
+
     // Priority 3 (inventory): Replace any lower-rarity main petal with highest-rarity from secondary (exclude heals)
     int worst_i = -1; uint8_t worst_r = 255;
     for (uint8_t i=0;i<mainN;++i) {
@@ -402,7 +650,7 @@ void apply_rearrange(Context &ctx) {
         for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) {
             uint8_t idx = secStart + j; PetalID::T sid = ctx.player.get_loadout_ids(idx);
             if (sid == PetalID::kNone || sid == PetalID::kBasic) continue;
-            if (!is_damage_petal(sid)) continue;
+            if (!is_damage_petal(sid) && sid != PetalID::kLeaf) continue; // allow Leaf as "better than Basic"
             ctx.player.set_loadout_ids(i, sid);
             ctx.player.set_loadout_ids(idx, PetalID::kNone); // trash basic
             return; // do one change per call

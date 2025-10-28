@@ -31,11 +31,15 @@ constexpr float FULL_HP = 0.95f; // above this, revert heals to secondary
 // Compute the best next action for a bot given the current world state
 Decision evaluate(Context const &ctx);
 
-// Carry out inventory rearrangement policy:
-// - If low HP and healing is present in secondary, bring it to main (now probabilistically multiple)
+// Inventory policy:
+// - If low HP and healing is present in secondary, bring it to main (probabilistically multiple).
 // - When healthy, move pure-heal petals to secondary, prefer replacing them with
 //   petals whose damage strictly exceeds the heal’s damage (Rose ≈ 5).
 //   Then probabilistically trash excess pure-heals in secondary.
+// - Before XP mode, purge Basics from main.
+// - XP mode: trash unneeded lower-rarity petals already in secondary,
+//   **while reserving enough damage petals to swap heals out later**.
+//   Never trash Leaf/pure-heals/upgrades, nor strong damage we’d use to replace heals.
 void apply_rearrange(Context &ctx);
 
 // Utilities
