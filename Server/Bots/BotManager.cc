@@ -115,7 +115,9 @@ void on_tick(Simulation *sim) {
         float cx = player.get_x();
         float cy = player.get_y();
         Bots::Priority::Context pctx{ sim, cam, player, half_w, half_h, cx, cy };
-        auto dec = Bots::Priority::evaluate(pctx); // currently only: Attack closest mob with value 1
+        auto dec = Bots::Priority::evaluate(pctx); // includes: Loot damage drop if has Basic (score 2), else Attack (score 1)
+        // Inventory-only rearrangement can run concurrently with movement/attack priorities
+        Bots::Priority::apply_rearrange(pctx);
         Bots::Control tmp{};
         compute_controls(sim, cam, dec, tmp);
         b.out_ax = tmp.ax; b.out_ay = tmp.ay; b.out_flags = tmp.flags;
@@ -194,7 +196,13 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
     Vector desired(0,0);
     bool attack = false; bool defend = false;
 
-    if (!best.null()) {
+    if (dec.type == Bots::Priority::Decision::Loot && sim->ent_alive(dec.target)) {
+        // Movement-first for loot even if a combat target exists
+        Entity &d = sim->get_ent(dec.target);
+        Vector to(d.get_x() - player.get_x(), d.get_y() - player.get_y());
+        to.set_magnitude(PLAYER_ACCELERATION);
+        desired = to; attack = false; defend = false;
+    } else if (!best.null()) {
         Entity &t = sim->get_ent(best);
         Vector delta(t.get_x() - player.get_x(), t.get_y() - player.get_y());
         float dist = delta.magnitude();
@@ -296,12 +304,6 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
                 attack = true; defend = false;
             }
         }
-    } else if (dec.type == Bots::Priority::Decision::Loot && sim->ent_alive(dec.target)) {
-        // Move fast to loot when targeted
-        Entity &d = sim->get_ent(dec.target);
-        Vector to(d.get_x() - player.get_x(), d.get_y() - player.get_y());
-        to.set_magnitude(PLAYER_ACCELERATION);
-        desired = to; attack = false; defend = false;
     } else {
         // No target: subtle mouse-like drift so we never appear perfectly stationary
         float roamA = (float)player.lifetime * 0.23f / TPS + (player.id.id & 3);
