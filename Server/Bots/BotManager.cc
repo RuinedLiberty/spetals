@@ -167,11 +167,35 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
         return MAP_DATA[zone_idx].difficulty < suitable_diff;
     };
 
-    if ((dec.type == Bots::Priority::Decision::Attack || dec.type == Bots::Priority::Decision::SeekHealMob) && sim->ent_alive(dec.target)) {
-        best = dec.target;
+    // Background rule: if under level 10 AND still has any Basic, do NOT proceed into higher zones.
+    auto has_basic_any = [&](Entity const &pl)->bool {
+        uint8_t mainN = pl.get_loadout_count();
+        for (uint8_t i = 0; i < mainN + MAX_SLOT_COUNT; ++i) {
+            if (pl.get_loadout_ids(i) == PetalID::kBasic) return true;
+        }
+        return false;
+    };
+    bool block_advancing = (player_level < 10) && has_basic_any(player);
+
+
+            if ((dec.type == Bots::Priority::Decision::Attack || dec.type == Bots::Priority::Decision::SeekHealMob) && sim->ent_alive(dec.target)) {
+        if (block_advancing) {
+            Entity &cand = sim->get_ent(dec.target);
+            uint32_t tz = Map::get_zone_from_pos(cand.get_x(), cand.get_y());
+            if (tz <= current_zone) best = dec.target; // accept only if not in further zone
+        } else {
+            best = dec.target;
+        }
     } else if (sim->ent_alive(player.target)) {
-        best = player.target;
+        if (block_advancing) {
+            Entity &cand = sim->get_ent(player.target);
+            uint32_t tz = Map::get_zone_from_pos(cand.get_x(), cand.get_y());
+            if (tz <= current_zone) best = player.target;
+        } else {
+            best = player.target;
+        }
     } else if (dec.type != Bots::Priority::Decision::Evacuate) { // do not pick targets while evacuating
+
         sim->spatial_hash.query(cx, cy, half_w + 50, half_h + 50, [&](Simulation *sm, Entity &e){
             if (!sm->ent_alive(e.id)) return;
             if (e.id == player.id) return;
@@ -180,11 +204,14 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
                     uint32_t ez = Map::get_zone_from_pos(e.get_x(), e.get_y());
                     // Skip targets in any zone that is overleveled for the bot
                     if (is_overleveled_for_zone(ez)) return;
+                    // If blocking advancement, skip targets in higher zones than current
+                    if (block_advancing && ez > current_zone) return;
                     if (best.null()) best = e.id;
                 }
             }
         });
     }
+
 
     if (!best.null() && dec.type != Bots::Priority::Decision::Evacuate) { player.target = best; if (bs) bs->last_decide_ts = 0; }
     else { player.target = NULL_ENTITY; if (bs) bs->last_decide_ts = 0; }
@@ -192,12 +219,21 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
     Vector desired(0,0);
     bool attack = false; bool defend = false;
 
-    if (dec.type == Bots::Priority::Decision::Loot && sim->ent_alive(dec.target)) {
+        if (dec.type == Bots::Priority::Decision::Loot && sim->ent_alive(dec.target)) {
         Entity &d = sim->get_ent(dec.target);
-        Vector to(d.get_x() - player.get_x(), d.get_y() - player.get_y());
-        to.set_magnitude(PLAYER_ACCELERATION);
-        desired = to; attack = false; defend = false;
+        uint32_t dz = Map::get_zone_from_pos(d.get_x(), d.get_y());
+        if (block_advancing && dz > current_zone) {
+            // Do not chase loot into higher zones; turn around instead
+            desired.set(-1.0f, 0.0f);
+            desired.set_magnitude(PLAYER_ACCELERATION);
+            attack = false; defend = false;
+        } else {
+            Vector to(d.get_x() - player.get_x(), d.get_y() - player.get_y());
+            to.set_magnitude(PLAYER_ACCELERATION);
+            desired = to; attack = false; defend = false;
+        }
     } else if (dec.type == Bots::Priority::Decision::Evacuate) {
+
         // Move to the right (toward higher zone indices). Slight vertical bias to stay near center.
         desired.set(1.0f, (player.get_y() < ARENA_HEIGHT*0.45f ? 0.2f : (player.get_y() > ARENA_HEIGHT*0.55f ? -0.2f : 0.0f)));
         desired.set_magnitude(PLAYER_ACCELERATION);
@@ -292,20 +328,54 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
                 attack = true; defend = false;
             }
         }
-    } else {
-        // === PRIORITY 0.5: WANDER FULL SPEED, RIGHT-BIASED (≈60/40) ===
+            } else {
+        // === PRIORITY 0.5: WANDER FULL SPEED ===
         float t = (float)player.lifetime / TPS;
+
         float theta = 0.9f * std::sin(0.8f * t + (player.id.id & 3))
                     + 0.4f * std::sin(1.7f * t + ((player.id.id>>2)&7));
         Vector randomUnit; randomUnit.unit_normal(theta);
-        Vector biased = randomUnit * 0.6f + Vector(1.0f, 0.0f) * 0.4f;
-        if (biased.magnitude() < 1e-3f) { biased.set(1.0f, 0.0f); }
+
+        Vector biased;
+        if (block_advancing) {
+            // Left-biased wander to avoid moving into higher zones
+            biased = randomUnit * 0.6f + Vector(-1.0f, 0.0f) * 0.4f;
+        } else {
+            // Default: slight right bias to explore
+            biased = randomUnit * 0.6f + Vector(1.0f, 0.0f) * 0.4f;
+        }
+
+                // If blocking advancement, hard-steer away from the right edge of the current zone
+        if (block_advancing) {
+            float right_edge = MAP_DATA[current_zone].right;
+            float margin = 250.0f; // pixels before boundary to turn around
+            if (player.get_x() > right_edge - margin) {
+                biased.set(-1.0f, 0.0f);
+            }
+        }
+
+        if (biased.magnitude() < 1e-3f) {
+
+            biased.set(block_advancing ? -1.0f : 1.0f, 0.0f);
+        }
         biased.set_magnitude(PLAYER_ACCELERATION);
         desired = biased;
         attack = false; defend = false;
     }
 
+
+        // General clamp: if blocking advancement, avoid steering further right when near the current zone's right edge
+    if (block_advancing) {
+        float right_edge = MAP_DATA[current_zone].right;
+        float margin = 200.0f;
+        if (player.get_x() > right_edge - margin && desired.x > 0.0f) {
+            desired.x = -std::fabs(desired.x);
+            desired.set_magnitude(PLAYER_ACCELERATION);
+        }
+    }
+
     Vector prev; if (bs) prev.set(bs->out_ax, bs->out_ay); else prev.set(0,0);
+
     auto wrap_pi = [](float a){ while (a > M_PI) a -= 2*M_PI; while (a < -M_PI) a += 2*M_PI; return a; };
     Vector smoothed = desired;
 
