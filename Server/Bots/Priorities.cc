@@ -1,6 +1,8 @@
 #include <Server/Bots/Priorities.hh>
 
 #include <cmath>
+#include <vector>
+#include <unordered_map>
 
 namespace Bots { namespace Priority {
 
@@ -18,7 +20,6 @@ static inline float damage_of(PetalID::T id) {
 
 static inline bool is_ranged(PetalID::T id) {
     if (id == PetalID::kNone) return false;
-    // Heuristic: consider petals with projectile-like behavior as ranged by name/known IDs
     switch(id) {
         case PetalID::kDandelion:
         case PetalID::kPeas:
@@ -35,9 +36,32 @@ static inline bool is_ranged(PetalID::T id) {
 }
 
 static inline bool has_basic(Entity const &player) {
+    // Check both main and secondary
     uint8_t N = player.get_loadout_count();
-    for (uint8_t i=0;i<N+MAX_SLOT_COUNT;++i) if (player.get_loadout_ids(i) == PetalID::kBasic) return true;
+    for (uint8_t i = 0; i < N + MAX_SLOT_COUNT; ++i)
+        if (player.get_loadout_ids(i) == PetalID::kBasic) return true;
     return false;
+}
+
+// Convenience
+static inline bool is_rose(PetalID::T id) { return id == PetalID::kRose; }
+static inline float rose_damage_threshold() {
+    float d = damage_of(PetalID::kRose);
+    return (d > 0.0f ? d : 5.0f); // default to 5 if data not populated
+}
+
+// --- PURE HEAL definition (broadened) ---
+// "Pure heal" = heals AND has negligible damage (treat tiny incidental damage as zero).
+// Also explicitly treat Rose as pure-heal to match design intent.
+static inline bool is_pure_heal(PetalID::T id) {
+    if (id == PetalID::kNone) return false;
+    auto const &pd = PETAL_DATA[id];
+    bool heals = (pd.attributes.burst_heal > 0 || pd.attributes.constant_heal > 0);
+    float dmg = damage_of(id);
+    if (!heals) return false;
+
+    if (is_rose(id)) return true;          // explicitly pure-heal behaviorally
+    return (dmg < 0.5f);                   // tolerate tiny non-zero damage
 }
 
 static inline bool has_heal_in_main_excl_leaf(Entity const &player) {
@@ -45,9 +69,45 @@ static inline bool has_heal_in_main_excl_leaf(Entity const &player) {
     for (uint8_t i=0;i<N;++i) {
         PetalID::T pid = player.get_loadout_ids(i);
         if (pid == PetalID::kLeaf) continue;
-        if (is_heal_only(pid)) return true;
+        if (is_pure_heal(pid)) return true;
     }
     return false;
+}
+
+struct HealPhaseState { bool was_low = false; bool cleanup_done = false; };
+static std::unordered_map<uint16_t, HealPhaseState> g_heal_state;
+
+static inline bool main_has_pure_heal(Entity const &player) {
+    uint8_t N = player.get_loadout_count();
+    for (uint8_t i=0;i<N;++i) {
+        PetalID::T pid = player.get_loadout_ids(i);
+        if (pid == PetalID::kLeaf) continue;
+        if (is_pure_heal(pid)) return true;
+    }
+    return false;
+}
+
+// Helper: pick the best secondary slot whose damage strictly exceeds a threshold
+static int pick_best_secondary_damage_slot(Entity const &player, uint8_t secStart, float threshold) {
+    int best_j = -1; float best_dmg = -1.0f;
+    for (uint8_t j = 0; j < MAX_SLOT_COUNT; ++j) {
+        PetalID::T sid = player.get_loadout_ids(secStart + j);
+        if (sid == PetalID::kNone) continue;
+        if (!is_damage_petal(sid)) continue;
+        float dmg = damage_of(sid);
+        if (dmg > threshold && dmg > best_dmg) { best_dmg = dmg; best_j = (int)j; }
+    }
+    return best_j;
+}
+
+// Fallback: any "reasonable" swap-in (damage/Leaf/Basic) when nothing beats threshold
+static int pick_any_reasonable_swapin(Entity const &player, uint8_t secStart) {
+    for (uint8_t j=0; j<MAX_SLOT_COUNT; ++j) {
+        PetalID::T sid = player.get_loadout_ids(secStart + j);
+        if (sid == PetalID::kNone) continue;
+        if (is_damage_petal(sid) || sid == PetalID::kLeaf || sid == PetalID::kBasic) return (int)j;
+    }
+    return -1;
 }
 
 Decision evaluate(Context const &ctx) {
@@ -79,7 +139,6 @@ Decision evaluate(Context const &ctx) {
             }
             if (!dropsHeal) return;
             float dx = e.get_x() - ctx.player.get_x(); float dy = e.get_y() - ctx.player.get_y(); float d2 = dx*dx + dy*dy;
-            // Prefer closer; tiebreak by higher minimal heal rarity
             if (healMob.null() || d2 < bestD2M || (std::fabs(d2 - bestD2M) < 1e-3 && minHealRarity > bestMinRarity)) {
                 healMob = e.id; bestD2M = d2; bestMinRarity = minHealRarity;
             }
@@ -87,16 +146,28 @@ Decision evaluate(Context const &ctx) {
         if (!healMob.null()) { d.type = Decision::SeekHealMob; d.target = healMob; d.score = 4.0f; return d; }
     }
 
-    // FULL_HP and heal in main (excluding Leaf): pursue any visible damage drop to replace heal (score 4)
+    // FULL HP and heal in main (excluding Leaf): pursue any visible damage drop (prefer dmg > Rose)
     if (hpRatio >= FULL_HP && has_heal_in_main_excl_leaf(ctx.player)) {
-        EntityID dmgDrop = NULL_ENTITY; float bestD2b = 0.0f;
+        float thr = rose_damage_threshold();
+        EntityID strongDrop = NULL_ENTITY; float strongD2 = 0.0f;
+        EntityID anyDmgDrop = NULL_ENTITY; float anyD2 = 0.0f;
+
         ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
             if (!sm->ent_alive(e.id)) return; if (!e.has_component(kDrop)) return; if (!in_fov(ctx, e)) return;
             PetalID::T pid = e.get_drop_id(); if (pid == PetalID::kNone) return; if (!is_damage_petal(pid)) return;
+
             float dx = e.get_x() - ctx.player.get_x(); float dy = e.get_y() - ctx.player.get_y(); float d2 = dx*dx + dy*dy;
-            if (dmgDrop.null() || d2 < bestD2b) { dmgDrop = e.id; bestD2b = d2; }
+
+            // Track nearest damage->Rose upgrade
+            if (damage_of(pid) > thr) {
+                if (strongDrop.null() || d2 < strongD2) { strongDrop = e.id; strongD2 = d2; }
+            }
+            // Track nearest any damage
+            if (anyDmgDrop.null() || d2 < anyD2) { anyDmgDrop = e.id; anyD2 = d2; }
         });
-        if (!dmgDrop.null()) { d.type = Decision::Loot; d.target = dmgDrop; d.score = 4.0f; return d; }
+
+        if (!strongDrop.null()) { d.type = Decision::Loot; d.target = strongDrop; d.score = 4.0f; return d; }
+        if (!anyDmgDrop.null()) { d.type = Decision::Loot; d.target = anyDmgDrop; d.score = 4.0f; return d; }
     }
 
     // Priority 3: If any visible drop has rarity higher than the lowest rarity in main, go loot it (score 3)
@@ -137,8 +208,10 @@ Decision evaluate(Context const &ctx) {
         float dx = e.get_x() - ctx.player.get_x(); float dy = e.get_y() - ctx.player.get_y(); float d2 = dx*dx + dy*dy;
         if (closest.null() || d2 < bestDist2) { closest = e.id; bestDist2 = d2; }
     });
-    if (!closest.null()) { d.type = Decision::Attack; d.target = closest; d.score = 1.0f; }
-    return d;
+    if (!closest.null()) { d.type = Decision::Attack; d.target = closest; d.score = 1.0f; return d; }
+
+    // Priority 0.5: Wander if no mobs/loot targets; move generally rightward, full speed
+    d.type = Decision::Wander; d.score = 0.5f; return d;
 }
 
 void apply_rearrange(Context &ctx) {
@@ -149,9 +222,12 @@ void apply_rearrange(Context &ctx) {
 
     float hpRatio = ctx.player.health / std::max(1.0f, ctx.player.max_health);
 
+    // Track heal phase transitions for one-time cleanup behavior
+    HealPhaseState &hs = g_heal_state[ctx.player.id.id];
+    if (hpRatio < LOW_HP) { hs.was_low = true; hs.cleanup_done = false; }
+
     // Priority 4 (inventory while low HP): equip healing in main without trashing the replaced petal
     if (hpRatio < LOW_HP) {
-        // Find any healing petal in secondary
         int heal_j = -1;
         for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) {
             PetalID::T sid = ctx.player.get_loadout_ids(secStart + j);
@@ -165,12 +241,10 @@ void apply_rearrange(Context &ctx) {
                 uint8_t r = r_of(mid);
                 float dmg = damage_of(mid);
                 bool rng = is_ranged(mid);
-                // Priority: lower rarity first; if equal rarity, ranged first; else lower damage
                 if (r < rep_r || (r == rep_r && (rng && !rep_is_ranged)) || (r == rep_r && rng == rep_is_ranged && dmg < rep_dmg)) {
                     rep_i = i; rep_r = r; rep_dmg = dmg; rep_is_ranged = rng;
                 }
             }
-            // Swap secondary heal into chosen main slot; move replaced petal into the secondary slot (no trash)
             uint8_t idx = secStart + (uint8_t)heal_j;
             PetalID::T replaced = ctx.player.get_loadout_ids(rep_i);
             PetalID::T heal = ctx.player.get_loadout_ids(idx);
@@ -180,39 +254,65 @@ void apply_rearrange(Context &ctx) {
         }
     }
 
-    // Priority 4 (inventory while fully healed): move healing petals back to secondary by swapping with any damage petal in secondary (no trash)
+    // Priority 4 (inventory while FULL HP):
+    // For EACH pure-heal in main, prefer swapping in a secondary petal whose damage > the heal’s damage.
+    // For Rose specifically, we use rose_damage_threshold() (~5).
     if (hpRatio >= FULL_HP) {
-        // For each healing petal in main (exclude Leaf), try to bring a damage petal from secondary into that slot
         for (uint8_t i=0;i<mainN;++i) {
             PetalID::T mid = ctx.player.get_loadout_ids(i);
             if (mid == PetalID::kLeaf) continue;
-            if (!is_heal_only(mid)) continue;
-            int dmg_j = -1;
+            if (!is_pure_heal(mid)) continue;
+
+            // Determine threshold: Rose => ~5; other heals => their own damage (often ~0)
+            float thr = is_rose(mid) ? rose_damage_threshold() : damage_of(mid);
+
+            // 1) Try to find a secondary petal strictly stronger than threshold
+            int swap_j = pick_best_secondary_damage_slot(ctx.player, secStart, thr);
+
+            // 2) Fallback: any reasonable damage/Leaf/Basic to ensure de-healing main
+            if (swap_j < 0) swap_j = pick_any_reasonable_swapin(ctx.player, secStart);
+
+            if (swap_j >= 0) {
+                uint8_t idx = secStart + (uint8_t)swap_j;
+                PetalID::T repl = ctx.player.get_loadout_ids(idx);
+                ctx.player.set_loadout_ids(i, repl); // bring damage in
+                ctx.player.set_loadout_ids(idx, mid); // move heal to secondary
+            }
+        }
+
+        // One-time cleanup of excess pure-heal petals in secondary per heal cycle
+        if (hs.was_low && !hs.cleanup_done && !main_has_pure_heal(ctx.player)) {
+            std::vector<uint8_t> heals;
+            heals.reserve(MAX_SLOT_COUNT);
             for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) {
-                PetalID::T sid = ctx.player.get_loadout_ids(secStart + j);
-                if (is_damage_petal(sid) || sid == PetalID::kLeaf) { dmg_j = (int)j; break; }
+                uint8_t idx = secStart + j;
+                PetalID::T sid = ctx.player.get_loadout_ids(idx);
+                if (is_pure_heal(sid)) heals.push_back(idx);
             }
-            if (dmg_j >= 0) {
-                uint8_t idx = secStart + (uint8_t)dmg_j;
-                PetalID::T dmg = ctx.player.get_loadout_ids(idx);
-                // Swap: damage to main, heal to secondary
-                ctx.player.set_loadout_ids(i, dmg);
-                ctx.player.set_loadout_ids(idx, mid);
-                return;
+            for (size_t k=0;k<heals.size();++k) {
+                float chance = 0.0f;
+                if (k == 0) chance = 0.02f;           // 1st heal: 2%
+                else if (k == 1) chance = 0.25f;      // 2nd: 25%
+                else if (k == 2) chance = 0.60f;      // 3rd: 60%
+                else if (k == 3) chance = 0.85f;      // 4th: 85%
+                else chance = 0.98f;                  // 5th+: 98%
+                if (frand() < chance) {
+                    ctx.player.set_loadout_ids(heals[k], PetalID::kNone);
+                }
             }
+            hs.cleanup_done = true;
+            hs.was_low = false;
         }
     }
 
-    // Priority 3 (inventory): Replace any lower-rarity main petal with highest-rarity from secondary; trash replaced (but never use heal-only for upgrade, and avoid selecting heal-only as worst if possible)
-    // Find worst main slot by rarity among non-heal-only first
+    // Priority 3 (inventory): Replace any lower-rarity main petal with highest-rarity from secondary (exclude heals)
     int worst_i = -1; uint8_t worst_r = 255;
     for (uint8_t i=0;i<mainN;++i) {
         PetalID::T mid = ctx.player.get_loadout_ids(i);
-        if (is_heal_only(mid)) continue; // skip heals
+        if (is_heal_only(mid)) continue; // skip heals for upgrade target
         uint8_t r = r_of(mid);
         if (r < worst_r) { worst_r = r; worst_i = (int)i; }
     }
-    // If all main slots were heals, fall back to overall worst (we still avoid using heal-only from secondary)
     if (worst_i < 0) {
         worst_r = 255;
         for (uint8_t i=0;i<mainN;++i) {
@@ -220,17 +320,15 @@ void apply_rearrange(Context &ctx) {
             if (r < worst_r) { worst_r = r; worst_i = (int)i; }
         }
     }
-    // Find best secondary petal by rarity (exclude heal-only), strictly better than worst
     int best_j = -1; uint8_t best_r = 0;
     for (uint8_t j=0;j<MAX_SLOT_COUNT;++j) {
         uint8_t idx = secStart + j; PetalID::T sid = ctx.player.get_loadout_ids(idx);
         if (sid == PetalID::kNone) continue;
-        if (is_heal_only(sid)) continue; // never pull heals into main for P3 upgrade
+        if (is_heal_only(sid) || is_pure_heal(sid)) continue; // never pull heals into main for P3 upgrade
         uint8_t r = r_of(sid);
         if (r > best_r) { best_r = r; best_j = (int)j; }
     }
     if (best_j >= 0 && worst_i >= 0 && best_r > worst_r) {
-        // Upgrade: move best secondary into worst main and trash the replaced (only if replaced is not heal-only)
         uint8_t idx = secStart + (uint8_t)best_j;
         ctx.player.set_loadout_ids((uint8_t)worst_i, ctx.player.get_loadout_ids(idx));
         ctx.player.set_loadout_ids(idx, PetalID::kNone);
@@ -267,6 +365,7 @@ bool is_heal_only(PetalID::T id) {
 
 bool is_damage_petal(PetalID::T id) {
     if (id == PetalID::kNone) return false; auto const &pd = PETAL_DATA[id];
+    // Treat any positive damage or body-damage as damage-capable
     return pd.damage > 0.01f || pd.attributes.extra_body_damage > 0.0f;
 }
 
