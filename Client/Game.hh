@@ -31,6 +31,12 @@ namespace Game {
     extern float slot_indicator_opacity;
     extern float transition_circle;
 
+    extern uint32_t account_level;
+    extern uint32_t account_xp;
+    extern uint32_t account_xp_needed;
+
+
+
     extern uint32_t respawn_level;
 
     extern std::array<PetalID::T, 2 * MAX_SLOT_COUNT> cached_loadout;

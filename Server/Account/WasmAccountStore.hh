@@ -15,4 +15,9 @@ namespace WasmAccountStore {
 
     // Sets the bit for the given id under account+category. Returns true on success.
     bool set_bit(Category category, const std::string &account_id, int id);
+
+    // Account XP helpers for WASM server runtime (in-memory, DB-backed via JS bridge)
+    bool get_xp(const std::string &account_id, uint32_t &xp_out);
+    bool set_xp(const std::string &account_id, uint32_t xp);
+    bool add_xp(const std::string &account_id, uint32_t delta);
 }

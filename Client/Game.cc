@@ -86,6 +86,11 @@ namespace Game {
     float transition_circle = 0;
 
     uint32_t respawn_level = 1;
+    uint32_t account_level = 1;
+    uint32_t account_xp = 0;
+    uint32_t account_xp_needed = 1;
+
+
 
 
     uint8_t loadout_count = 5;

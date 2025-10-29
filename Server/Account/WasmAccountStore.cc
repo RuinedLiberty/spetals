@@ -22,6 +22,7 @@ namespace {
     };
 
     std::unordered_map<Key, std::vector<uint8_t>, KeyHash> g_bits;
+    std::unordered_map<std::string, uint32_t> g_account_xp;
     std::mutex g_mu;
 }
 
@@ -52,6 +53,27 @@ bool set_bit(Category category, const std::string &account_id, int id) {
     size_t bitIndex = idx & 7u;
     if (byteIndex >= bits.size()) bits.resize(byteIndex + 1, 0);
     bits[byteIndex] = (uint8_t)(bits[byteIndex] | (1u << bitIndex));
+    return true;
+}
+
+bool get_xp(const std::string &account_id, uint32_t &xp_out) {
+    std::lock_guard<std::mutex> lk(g_mu);
+    auto it = g_account_xp.find(account_id);
+    if (it == g_account_xp.end()) { xp_out = 0; return false; }
+    xp_out = it->second;
+    return true;
+}
+
+bool set_xp(const std::string &account_id, uint32_t xp) {
+    std::lock_guard<std::mutex> lk(g_mu);
+    g_account_xp[account_id] = xp;
+    return true;
+}
+
+bool add_xp(const std::string &account_id, uint32_t delta) {
+    std::lock_guard<std::mutex> lk(g_mu);
+    uint32_t &ref = g_account_xp[account_id];
+    ref += delta;
     return true;
 }
 

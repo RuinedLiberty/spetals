@@ -13,10 +13,14 @@
 
 enum Clientbound {
     kClientUpdate,
-    kMobGallery, // initial or full mob gallery payload for the account
+        kMobGallery, // initial or full mob gallery payload for the account
     kPetalGallery, // initial or full petal gallery payload for the account
+    kAccountLevel, // account level payload (level, xp towards next)
+    kAccountLevelBar, // optional updated bar (level, xp, need)
+
     kPingReply // echo reply for RTT measurement
 };
+
 
 
 
