@@ -9,7 +9,7 @@ uint32_t const BOT_COUNT = 20;
 
 float const PETAL_DISABLE_DELAY = 45.0f; //seconds
 float const PLAYER_ACCELERATION = 5.38f;
-float const MOB_ACCELERATION = 5.0f;
+float const MOB_ACCELERATION = 5.38f;
 float const DEFAULT_FRICTION = 1.0f/3.0f;
 float const SUMMON_RETREAT_RADIUS = 600.0f;
 float const DIGGER_SPAWN_CHANCE = 0.25f;
@@ -19,11 +19,12 @@ float const BASE_PETAL_ROTATION_SPEED = 2.5f;
 float const BASE_FOV = 0.9f;
 float const BASE_HEALTH = 100.0f;
 float const BASE_BODY_DAMAGE = 25.0f;
+
 uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
 uint8_t const ENABLE_BOT_INVENTORY_OVERLAY = 0;
 
-float const DROP_RATE_MULTIPLIER = 5.0f; // e.g., 5.0f -> multiply base chances by 5
-float const DROP_RATE_MIN = 1.0f;        // e.g., 1.0f -> floor at 1% for any base chance
+float const DROP_RATE_MULTIPLIER = 5.0f;
+float const DROP_RATE_MIN = 0.5f;
 
 std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
