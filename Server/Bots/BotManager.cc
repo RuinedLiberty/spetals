@@ -328,34 +328,37 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
                 attack = true; defend = false;
             }
         }
-            } else {
+                } else {
         // === PRIORITY 0.5: WANDER FULL SPEED ===
+        // Smooth steering: only bias left when the next zone's boundary is approaching in view.
         float t = (float)player.lifetime / TPS;
-
         float theta = 0.9f * std::sin(0.8f * t + (player.id.id & 3))
                     + 0.4f * std::sin(1.7f * t + ((player.id.id>>2)&7));
         Vector randomUnit; randomUnit.unit_normal(theta);
 
         Vector biased;
         if (block_advancing) {
-            // Left-biased wander to avoid moving into higher zones
-            biased = randomUnit * 0.6f + Vector(-1.0f, 0.0f) * 0.4f;
+            // Distance from the right side of our FOV to the current zone's right edge
+            float right_edge = MAP_DATA[current_zone].right;
+            float vision_right = player.get_x() + half_w;
+            float dist = right_edge - vision_right; // if <= 0: next zone is visible
+            float pre_margin = 400.0f; // start steering before the edge hits the FOV
+            float s = 0.0f;
+            if (dist <= pre_margin) {
+                s = 1.0f - fclamp(dist / pre_margin, 0.0f, 1.0f); // 0..1 smooth factor
+            }
+            // Blend random with a leftward steering proportional to s
+            // When s=0 → unbiased random; when s=1 → strong left bias
+            biased = randomUnit * (1.0f - 0.6f * s) + Vector(-1.0f, 0.0f) * (0.6f * s);
+            // Slight vertical centering to keep motion organic
+            float vcenter = (player.get_y() < ARENA_HEIGHT*0.45f ? 0.1f : (player.get_y() > ARENA_HEIGHT*0.55f ? -0.1f : 0.0f));
+            biased = biased + Vector(0.0f, vcenter);
         } else {
-            // Default: slight right bias to explore
+            // Default: gentle right bias to explore when no restriction exists
             biased = randomUnit * 0.6f + Vector(1.0f, 0.0f) * 0.4f;
         }
 
-                // If blocking advancement, hard-steer away from the right edge of the current zone
-        if (block_advancing) {
-            float right_edge = MAP_DATA[current_zone].right;
-            float margin = 250.0f; // pixels before boundary to turn around
-            if (player.get_x() > right_edge - margin) {
-                biased.set(-1.0f, 0.0f);
-            }
-        }
-
         if (biased.magnitude() < 1e-3f) {
-
             biased.set(block_advancing ? -1.0f : 1.0f, 0.0f);
         }
         biased.set_magnitude(PLAYER_ACCELERATION);
@@ -364,17 +367,9 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
     }
 
 
-        // General clamp: if blocking advancement, avoid steering further right when near the current zone's right edge
-    if (block_advancing) {
-        float right_edge = MAP_DATA[current_zone].right;
-        float margin = 200.0f;
-        if (player.get_x() > right_edge - margin && desired.x > 0.0f) {
-            desired.x = -std::fabs(desired.x);
-            desired.set_magnitude(PLAYER_ACCELERATION);
-        }
-    }
 
-    Vector prev; if (bs) prev.set(bs->out_ax, bs->out_ay); else prev.set(0,0);
+            Vector prev; if (bs) prev.set(bs->out_ax, bs->out_ay); else prev.set(0,0);
+
 
     auto wrap_pi = [](float a){ while (a > M_PI) a -= 2*M_PI; while (a < -M_PI) a += 2*M_PI; return a; };
     Vector smoothed = desired;
