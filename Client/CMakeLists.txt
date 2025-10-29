@@ -61,6 +61,7 @@ set(SRCS
     Assets/Petals/LPeas.cc
     Assets/Petals/Soil.cc
     Assets/Petals/TriFaster.cc
+    Assets/Petals/PoisonTricac.cc
 
     Render/RenderDrop.cc
     Render/RenderFlower.cc

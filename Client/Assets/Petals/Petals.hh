@@ -4,7 +4,6 @@
 #include <cstdint>
 
 namespace Petals {
-    // One function per petal. r is the canonical radius for the petal icon
     void None(Renderer &ctx, float r);
     void Basic(Renderer &ctx, float r);
     void Light(Renderer &ctx, float r);
@@ -51,9 +50,8 @@ namespace Petals {
     void Bone(Renderer &ctx, float r);
     void Yucca(Renderer &ctx, float r);
     void Corn(Renderer &ctx, float r);
-    // New petals
     void GoldenLeaf(Renderer &ctx, float r);
     void LPeas(Renderer &ctx, float r);
     void Soil(Renderer &ctx, float r);
     void TriFaster(Renderer &ctx, float r);
-}
+    void PoisonTricac(Renderer &ctx, float r);}

@@ -143,7 +143,7 @@ Entity &alloc_petal(Simulation *sim, PetalID::T petal_id, Entity const &parent) 
     petal.add_component(kPhysics);
     petal.set_x(parent.get_x());
     petal.set_y(parent.get_y());
-    petal.set_radius(petal_data.radius);
+    petal.set_radius(petal_data.radius + petal_data.attributes.extra_petal_radius);
     if (petal_data.attributes.rotation_style == PetalAttributes::kPassiveRot)
         petal.set_angle(frand() * 2 * M_PI);
     petal.mass = petal_data.attributes.mass;

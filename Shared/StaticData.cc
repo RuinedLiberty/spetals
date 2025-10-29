@@ -725,7 +725,24 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             .clump_radius = 6,
             .extra_rotation_speed = 1.7f
         }
-    }, 
+    },
+        {
+        .name = "Cactus",
+        .description = "A unique trio of poisonous cacti",
+        .health = 20.0,
+        .damage = 7.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 20,
+            .clump_radius_icon = 10,
+            .extra_health = 60,
+            .extra_petal_radius = 4.0f,
+            .poison_damage = { .damage = 2.0, .time = 6.0 }
+        }
+    }
 }};
 
 std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
@@ -984,14 +1001,16 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             PetalID::kMissile,
             PetalID::kPoisonCactus,
             PetalID::kStinger,
-            PetalID::kTricac
+            PetalID::kTricac,
+            PetalID::kPoisonTricac
         },
         .drop_rates = {
             /* PetalID::kCactus */ 3.00f,
             /* PetalID::kMissile */ 0.90f,
             /* PetalID::kPoisonCactus */ 0.10f,
             /* PetalID::kStinger */ 5.00f,
-            /* PetalID::kTricac */ 0.005f
+            /* PetalID::kTricac */ 0.005f,
+            /* PetalID::kPoisonTricac */ 0.001f
         },
         .attributes = {
             .stationary = 1
@@ -1185,7 +1204,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             /* PetalID::kIris */ 12.00f,
             /* PetalID::kWeb */ 9.00f,
             /* PetalID::kFaster */ 3.00f,
-            /* PetalID::kTriweb */ 0.02f
+            /* PetalID::kTriweb */ 0.02f,
             /* PetalID::kThirdEye */ 0.003f
         },
         .attributes = { 
