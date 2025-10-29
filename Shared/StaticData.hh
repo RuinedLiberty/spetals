@@ -13,6 +13,7 @@ extern uint32_t const BOT_COUNT;
 
 extern float const PETAL_DISABLE_DELAY;
 extern float const PLAYER_ACCELERATION;
+extern float const MOB_ACCELERATION;
 extern float const DEFAULT_FRICTION;
 extern float const SUMMON_RETREAT_RADIUS;
 extern float const DIGGER_SPAWN_CHANCE;

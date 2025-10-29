@@ -30,7 +30,7 @@ static void default_tick_idle_moving(Simulation *sim, Entity &ent) {
     float r = (ent.ai_tick - 0.5 * TPS) / (2 * TPS);
     ent.acceleration
         .unit_normal(ent.get_angle())
-        .set_magnitude(2 * PLAYER_ACCELERATION * (r - r * r));
+        .set_magnitude(2 * MOB_ACCELERATION * (r - r * r));
 }
 
 static void default_tick_returning(Simulation *sim, Entity &ent, float speed = 1.0) {
@@ -48,7 +48,7 @@ static void default_tick_returning(Simulation *sim, Entity &ent, float speed = 1
         ent.ai_state = AIState::kIdle;
         return;
     } 
-    delta.set_magnitude(PLAYER_ACCELERATION * speed);
+    delta.set_magnitude(MOB_ACCELERATION * speed);
     ent.acceleration = delta;
     ent.set_angle(delta.angle());
 }
@@ -78,7 +78,7 @@ static void tick_default_neutral(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-        v.set_magnitude(PLAYER_ACCELERATION * 0.975);
+        v.set_magnitude(MOB_ACCELERATION * 0.975);
         ent.acceleration = v;
         ent.set_angle(v.angle());
         return;
@@ -97,7 +97,7 @@ static void tick_default_aggro(Simulation *sim, Entity &ent, float speed) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
         _focus_lose_clause(ent, v);
-        v.set_magnitude(PLAYER_ACCELERATION * speed);
+        v.set_magnitude(MOB_ACCELERATION * speed);
         ent.acceleration = v;
         ent.set_angle(v.angle());
         return;
@@ -148,7 +148,7 @@ static void tick_hornet_aggro(Simulation *sim, Entity &ent) {
         _focus_lose_clause(ent, v);
         float dist = v.magnitude();
         if (dist > 300) {
-            v.set_magnitude(PLAYER_ACCELERATION * 0.975);
+            v.set_magnitude(MOB_ACCELERATION * 0.975);
             ent.acceleration = v;
         } else {
             ent.acceleration.set(0,0);
@@ -168,7 +168,7 @@ static void tick_hornet_aggro(Simulation *sim, Entity &ent) {
             missile.projectile_target_ratio = 0.5f;
             missile.projectile_decay_active = 1;
             Vector kb;
-            kb.unit_normal(ent.get_angle() - M_PI).set_magnitude(2.5 * PLAYER_ACCELERATION);
+            kb.unit_normal(ent.get_angle() - M_PI).set_magnitude(2.5 * MOB_ACCELERATION);
             ent.velocity += kb;            
         }
         return;
@@ -200,14 +200,14 @@ static void tick_centipede_passive(Simulation *sim, Entity &ent) {
             break;
         }
     }
-    ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(PLAYER_ACCELERATION / 10);
+    ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(MOB_ACCELERATION / 10);
 }
 
 static void tick_centipede_neutral(Simulation *sim, Entity &ent, float speed) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-        v.set_magnitude(PLAYER_ACCELERATION * speed);
+        v.set_magnitude(MOB_ACCELERATION * speed);
         ent.acceleration = v;
         ent.set_angle(v.angle());
         return;
@@ -220,13 +220,13 @@ static void tick_centipede_neutral(Simulation *sim, Entity &ent, float speed) {
             case AIState::kIdle: {
                 ent.set_angle(ent.get_angle() + 0.25 / TPS);
                 if (frand() < 1 / (5.0 * TPS)) ent.ai_state = AIState::kIdleMoving;
-                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(PLAYER_ACCELERATION * speed);
+                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(MOB_ACCELERATION * speed);
                 break;
             }
             case AIState::kIdleMoving: {
                 ent.set_angle(ent.get_angle() - 0.25 / TPS);
                 if (frand() < 1 / (5.0 * TPS)) ent.ai_state = AIState::kIdle;
-                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(PLAYER_ACCELERATION * speed);
+                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(MOB_ACCELERATION * speed);
                 break;
             }
             case AIState::kReturning: {
@@ -242,7 +242,7 @@ static void tick_centipede_aggro(Simulation *sim, Entity &ent) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
         _focus_lose_clause(ent, v);
-        v.set_magnitude(PLAYER_ACCELERATION * 0.95);
+        v.set_magnitude(MOB_ACCELERATION * 0.95);
         ent.acceleration = v;
         ent.set_angle(v.angle());
         return;
@@ -256,13 +256,13 @@ static void tick_centipede_aggro(Simulation *sim, Entity &ent) {
             case AIState::kIdle: {
                 ent.set_angle(ent.get_angle() + 0.25 / TPS);
                 if (frand() < 1 / (5.0 * TPS)) ent.ai_state = AIState::kIdleMoving;
-                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(PLAYER_ACCELERATION / 10);
+                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(MOB_ACCELERATION / 10);
                 break;
             }
             case AIState::kIdleMoving: {
                 ent.set_angle(ent.get_angle() - 0.25 / TPS);
                 if (frand() < 1 / (5.0 * TPS)) ent.ai_state = AIState::kIdle;
-                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(PLAYER_ACCELERATION / 10);
+                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(MOB_ACCELERATION / 10);
                 break;
             }
             case AIState::kReturning: {
@@ -281,7 +281,7 @@ static void tick_sandstorm(Simulation *sim, Entity &ent) {
                 ent.heading_angle = frand() * 2 * M_PI;
                 ent.ai_state = AIState::kIdleMoving;
             }
-            Vector rand = Vector::rand(PLAYER_ACCELERATION * 0.5);
+            Vector rand = Vector::rand(MOB_ACCELERATION * 0.5);
             ent.acceleration.set(rand.x, rand.y);
             break;
         }
@@ -294,10 +294,10 @@ static void tick_sandstorm(Simulation *sim, Entity &ent) {
                 ent.heading_angle += frand() * M_PI - M_PI / 2;
             Vector head;
             head.unit_normal(ent.heading_angle);
-            head.set_magnitude(PLAYER_ACCELERATION);
+            head.set_magnitude(MOB_ACCELERATION);
             Vector rand;
             rand.unit_normal(ent.heading_angle + frand() * M_PI - M_PI / 2);
-            rand.set_magnitude(PLAYER_ACCELERATION * 0.5);
+            rand.set_magnitude(MOB_ACCELERATION * 0.5);
             head += rand;
             ent.acceleration.set(head.x, head.y);
             break;
@@ -322,7 +322,7 @@ static void tick_digger(Simulation *sim, Entity &ent) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
         _focus_lose_clause(ent, v);
-        v.set_magnitude(PLAYER_ACCELERATION * 0.95);
+        v.set_magnitude(MOB_ACCELERATION * 0.95);
         if (ent.health / ent.max_health > 0.1) {
             BitMath::set(ent.input, InputFlags::kAttacking);
         } else {
@@ -349,7 +349,7 @@ static void tick_digger(Simulation *sim, Entity &ent) {
             case AIState::kIdleMoving: {
                 if (ent.ai_tick > 5 * TPS)
                     ent.ai_state = AIState::kIdle;
-                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(PLAYER_ACCELERATION);
+                ent.acceleration.unit_normal(ent.get_angle()).set_magnitude(MOB_ACCELERATION);
                 break;
             }
             case AIState::kReturning: {
