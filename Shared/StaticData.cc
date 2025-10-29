@@ -22,6 +22,9 @@ float const BASE_BODY_DAMAGE = 25.0f;
 uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
 uint8_t const ENABLE_BOT_INVENTORY_OVERLAY = 0;
 
+float const DROP_RATE_MULTIPLIER = 5.0f; // e.g., 5.0f -> multiply base chances by 5
+float const DROP_RATE_MIN = 1.0f;        // e.g., 1.0f -> floor at 1% for any base chance
+
 std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "None",
@@ -1337,4 +1340,11 @@ uint32_t loadout_slots_at_level(uint32_t level) {
 float hp_at_level(uint32_t level) {
     if (level > MAX_LEVEL) level = MAX_LEVEL;
     return BASE_HEALTH + level;
+}
+
+float apply_drop_rate_modifiers(float base_pct) {
+    float v = base_pct * DROP_RATE_MULTIPLIER;
+    if (v < DROP_RATE_MIN) v = DROP_RATE_MIN;
+    if (v > 100.0f) v = 100.0f;
+    return v;
 }
