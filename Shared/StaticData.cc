@@ -20,6 +20,8 @@ float const BASE_FOV = 0.9f;
 float const BASE_HEALTH = 100.0f;
 float const BASE_BODY_DAMAGE = 25.0f;
 
+float const UNIQUE_BASIC_REPLACE_CHANCE = 0.1f;
+
 uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
 uint8_t const ENABLE_BOT_INVENTORY_OVERLAY = 0;
 
