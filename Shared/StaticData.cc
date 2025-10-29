@@ -260,7 +260,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .attributes = {
             .icon_angle = 0.2,
             .clump_radius = 8,
-            .secondary_reload = 0.1,
+            .secondary_reload = 0.5,
             .defend_only = 1,
             .split_projectile = 1
         }
@@ -365,7 +365,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .rarity = RarityID::kEpic,
         .attributes = {
             .clump_radius = 8,
-            .secondary_reload = 0.1,
+            .secondary_reload = 0.5,
             .poison_damage = {
                 .damage = 20.0,
                 .time = 0.5
@@ -692,7 +692,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .rarity = RarityID::kLegendary,
         .attributes = {
             .clump_radius = 10,
-            .secondary_reload = 0.1,
+            .secondary_reload = 0.5,
             .poison_damage = { .damage = 35.0, .time = 1.0 },
             .defend_only = 1,
             .split_projectile = 1,
