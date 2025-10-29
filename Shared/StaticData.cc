@@ -269,11 +269,12 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 4,
         .rarity = RarityID::kRare,
         .attributes = {
-            .icon_angle = 0.2,
+            .icon_angle = 0.25,
             .clump_radius = 8,
             .secondary_reload = 0.5,
             .defend_only = 1,
-            .split_projectile = 1
+            .split_projectile = 1,
+            .icon_size = 7.5,
         }
     },
     {
@@ -350,7 +351,6 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             .spawns = MobID::kSoldierAnt
         }
     },
-    
     {
         .name = "Pollen",
         .description = "Asthmatics beware",
@@ -383,6 +383,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             },
             .defend_only = 1,
             .split_projectile = 1,
+            .icon_angle = 0.25,
+            .icon_size = 7.5
         }
     },
     {
@@ -706,7 +708,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             .poison_damage = { .damage = 35.0, .time = 1.0 },
             .defend_only = 1,
             .split_projectile = 1,
-            .icon_angle = 0.2
+            .icon_angle = 0.25
         }
     },
     {

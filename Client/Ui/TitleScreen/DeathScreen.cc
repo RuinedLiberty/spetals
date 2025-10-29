@@ -36,7 +36,12 @@ void DeadFlowerIcon::on_render(Renderer &ctx) {
         PetalID::T id = physical_loadout[i];
         ctx.translate(offset_x, offset_y);
         ctx.rotate(PETAL_DATA[id].attributes.icon_angle);
-        if (PETAL_DATA[id].radius > 20) ctx.scale(20 / PETAL_DATA[id].radius);
+        {
+            float base_r = PETAL_DATA[id].radius;
+            float icon_sz = PETAL_DATA[id].attributes.icon_size;
+            float desired = icon_sz > 0 ? icon_sz : base_r;
+            if (desired > 20) ctx.scale(20 / desired);
+        }
         draw_static_petal_single(id, ctx);
     }
     {
@@ -54,7 +59,12 @@ void DeadFlowerIcon::on_render(Renderer &ctx) {
         PetalID::T id = physical_loadout[i];
         ctx.translate(offset_x, offset_y);
         ctx.rotate(PETAL_DATA[id].attributes.icon_angle);
-        if (PETAL_DATA[id].radius > 20) ctx.scale(20 / PETAL_DATA[id].radius);
+        {
+            float base_r = PETAL_DATA[id].radius;
+            float icon_sz = PETAL_DATA[id].attributes.icon_size;
+            float desired = icon_sz > 0 ? icon_sz : base_r;
+            if (desired > 20) ctx.scale(20 / desired);
+        }
         draw_static_petal_single(id, ctx);
     }
 }

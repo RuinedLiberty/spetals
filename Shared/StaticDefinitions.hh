@@ -196,6 +196,7 @@ struct PetalAttributes {
     };
     float clump_radius = 0;
     float clump_radius_icon = 0;
+    float icon_size = 0;
     float secondary_reload = 0;
     float constant_heal = 0;
     float burst_heal = 0;
