@@ -48,8 +48,9 @@ void LevelBar::on_render(Renderer &ctx) {
 }
 
 Element *Ui::make_level_bar() {
-    Element *level_bar = new Ui::VContainer({
+        Element *level_bar = new Ui::VContainer({
         new Ui::LevelBar(),
+        new Ui::AccountLevelBar(),
         new Ui::DynamicText(14, [](){
             std::string format_string;
             if (Game::alive()) {

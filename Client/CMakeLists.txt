@@ -88,6 +88,9 @@ set(SRCS
     Ui/InGame/Leaderboard.cc
     Ui/InGame/LevelBar.cc
     Ui/InGame/LoadoutPetal.cc
+    Ui/InGame/LevelBar.cc
+    Ui/InGame/AccountLevelBar.cc
+    Ui/InGame/LoadoutPetal.cc
     Ui/InGame/LoadoutSlot.cc
     Ui/InGame/Map.cc
     Ui/InGame/Mobile.cc
