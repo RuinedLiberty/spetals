@@ -35,7 +35,6 @@ static void render_bot_debug_inventory(Renderer &ctx, Entity const &player, floa
     }
 }
 
-
 void render_name(Renderer &ctx, Entity const &ent) {
     if (!ent.get_nametag_visible()) return;
     if (ent.id == Game::player_id) return;
@@ -47,8 +46,13 @@ void render_name(Renderer &ctx, Entity const &ent) {
         ctx.draw_text(ent.get_name().c_str(), { .size = 18 });
     }
 
-        // Show mini inventory layout below every flower (testing/debug)
-    if (ent.has_component(kFlower)) {
+    // Show mini inventory layout below bots only, controlled by server flag
+        if (ENABLE_BOT_INVENTORY_OVERLAY
+        && ent.has_component(kFlower)
+        && Game::simulation.ent_exists(ent.get_parent())
+        && ent.get_parent() != Game::camera_id
+        && Game::simulation.get_ent(ent.get_parent()).has_component(kCamera)) {
+
         RenderContext r(&ctx);
         ctx.translate(0, ent.get_radius() + 24);
         render_bot_debug_inventory(ctx, ent, 1.0f);
