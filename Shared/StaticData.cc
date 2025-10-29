@@ -474,7 +474,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 3,
         .rarity = RarityID::kLegendary,
         .attributes = {
-            .clump_radius = 10,
+            .clump_radius = 15,
+            .clump_radius_icon = 10,
             .extra_health = 40,
         }
     },
@@ -676,7 +677,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 1.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
-                .attributes = {
+        .attributes = {
             .reload_reduction = 0.21f,
             .icon_angle = -1
         }
@@ -723,6 +724,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 3,
         .rarity = RarityID::kLegendary,
         .attributes = {
+            .clump_radius = 6,
             .extra_rotation_speed = 1.7f
         }
     }, 
@@ -1103,13 +1105,13 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .damage = 10.0,
         .radius = {35.0},
         .xp = 4,
-                .drops = {
+        .drops = {
             PetalID::kSand,
             PetalID::kFaster,
             PetalID::kSalt,
             PetalID::kTriFaster,
         },
-                .drop_rates = {
+        .drop_rates = {
             /* PetalID::kSand */ 12.00f,
             /* PetalID::kFaster */ 4.00f,
             /* PetalID::kSalt */ 8.00f,

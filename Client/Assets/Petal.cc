@@ -74,7 +74,9 @@ void draw_static_petal(PetalID::T id, Renderer &ctx) {
     for (uint32_t i = 0; i < count; ++i) {
         RenderContext context(&ctx);
         float rad = 10;
-        if (data.attributes.clump_radius != 0)
+        if (data.attributes.clump_radius_icon != 0)
+            rad = data.attributes.clump_radius_icon;
+        else if (data.attributes.clump_radius != 0)
             rad = data.attributes.clump_radius;
         ctx.rotate(i * 2 * M_PI / data.count);
         if (data.count > 1) ctx.translate(rad, 0);
