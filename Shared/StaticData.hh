@@ -8,6 +8,9 @@
 extern uint32_t const MAX_LEVEL;
 extern uint32_t const TPS;
 
+// How many CPU-controlled player bots to spawn server-side
+extern uint32_t const BOT_COUNT;
+
 extern float const PETAL_DISABLE_DELAY;
 extern float const PLAYER_ACCELERATION;
 extern float const DEFAULT_FRICTION;
@@ -19,6 +22,8 @@ extern float const BASE_PETAL_ROTATION_SPEED;
 extern float const BASE_FOV;
 extern float const BASE_HEALTH;
 extern float const BASE_BODY_DAMAGE;
+extern uint8_t const ENABLE_MOB_HITBOX_DEBUG;
+extern uint8_t const ENABLE_BOT_INVENTORY_OVERLAY;
 
 extern std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA;
 extern std::array<struct MobData, MobID::kNumMobs> const MOB_DATA;

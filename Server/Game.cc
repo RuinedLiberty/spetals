@@ -5,6 +5,7 @@
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
 #include <Server/Account/AccountLink.hh>
+#include <Server/Bots/ForwardShims.hh>
 #ifndef WASM_SERVER
 #include <Server/AuthDB.hh>
 #else
@@ -19,6 +20,8 @@
 
 #include <vector>
 #include <algorithm>
+#include <cmath>
+
 
 static void _send_mob_gallery_for(Client *client) {
     if (!client || client->account_id.empty()) return;
@@ -107,10 +110,22 @@ static void _update_client(Simulation *sim, Client *client) {
     Writer writer(Server::OUTGOING_PACKET);
     writer.write<uint8_t>(Clientbound::kClientUpdate);
     writer.write<EntityID>(client->camera);
-    sim->spatial_hash.query(camera.get_camera_x(), camera.get_camera_y(), 
+        sim->spatial_hash.query(camera.get_camera_x(), camera.get_camera_y(), 
     960 / camera.get_fov() + 50, 540 / camera.get_fov() + 50, [&](Simulation *, Entity &ent){
         in_view.insert(ent.id);
     });
+    // Also include nearby CPU-controlled cameras (bots) so client can debug their vision rectangles
+    sim->for_each<kCamera>([&](Simulation *sm, Entity &other_cam){
+        if (other_cam.id == camera.id) return;
+        // Only replicate bot cameras
+        if (!BitMath::at(other_cam.flags, EntityFlags::kCPUControlled)) return;
+        float dx = std::fabs(other_cam.get_camera_x() - camera.get_camera_x());
+        float dy = std::fabs(other_cam.get_camera_y() - camera.get_camera_y());
+        if (dx <= 960 / camera.get_fov() + 50 && dy <= 540 / camera.get_fov() + 50) {
+            in_view.insert(other_cam.id);
+        }
+    });
+
 
     for (EntityID const &i: client->in_view) {
         if (!in_view.contains(i)) {
@@ -150,9 +165,15 @@ void GameInstance::init() {
     team_manager.add_team(ColorID::kBlue);
     team_manager.add_team(ColorID::kRed);
     #endif
+        // Spawn server-side CPU cameras/players to simulate population
+    if (BOT_COUNT > 0) {
+        Bots_spawn_all(&simulation, BOT_COUNT);
+    }
 }
 
 void GameInstance::tick() {
+    // IMPORTANT: Drive bot AI before simulation.tick so their inputs apply this frame
+    Bots_on_tick(&simulation);
     simulation.tick();
     for (Client *client : clients)
         _update_client(&simulation, client);

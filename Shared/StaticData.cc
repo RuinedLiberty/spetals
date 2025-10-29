@@ -5,6 +5,9 @@
 uint32_t const MAX_LEVEL = 99;
 uint32_t const TPS = 20;
 
+// Default number of CPU-controlled player bots to spawn
+uint32_t const BOT_COUNT = 20;
+
 float const PETAL_DISABLE_DELAY = 45.0f; //seconds
 float const PLAYER_ACCELERATION = 5.0f;
 float const DEFAULT_FRICTION = 1.0f/3.0f;
@@ -16,6 +19,8 @@ float const BASE_PETAL_ROTATION_SPEED = 2.5f;
 float const BASE_FOV = 0.9f;
 float const BASE_HEALTH = 100.0f;
 float const BASE_BODY_DAMAGE = 25.0f;
+uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
+uint8_t const ENABLE_BOT_INVENTORY_OVERLAY = 0;
 
 std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
@@ -324,7 +329,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 2,
         .rarity = RarityID::kEpic,
         .attributes = { 
-            .secondary_reload = 3.5,
+            .secondary_reload = 1,
             .defend_only = 1,
             .rotation_style = PetalAttributes::kNoRot,
             .spawns = MobID::kSoldierAnt

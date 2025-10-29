@@ -186,32 +186,25 @@ Entity &alloc_web(Simulation *sim, float radius, Entity const &parent) {
     return web;
 }
 
-Entity &alloc_cpu_camera(Simulation *sim, EntityID const team) {
+Entity &alloc_cpu_camera(Simulation *sim, EntityID const /*team_unused*/) {
     Entity &ent = sim->alloc_ent();
     ent.add_component(kCamera);
     ent.add_component(kRelations);
 
     ent.set_fov(BASE_FOV);
-    ent.set_respawn_level(frand() * 30);
-    ent.set_team(team);
-    ent.set_color(ColorID::kGray);
+    ent.set_respawn_level(1);
+    // Give each CPU camera its own team like real players
+    ent.set_team(ent.id);
+    ent.set_color(ColorID::kYellow);
     
-    //need to auto add to petaltracker
-    std::vector<PetalID::T> const inventory = {
-        PetalID::kRose, PetalID::kBasic, PetalID::kBasic, 
-        PetalID::kRose, PetalID::kBasic, PetalID::kBasic,
-        PetalID::kRose, PetalID::kBasic, PetalID::kBasic
-    };
-
-    for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i)
-        ent.set_inventory(i, inventory[i]);
-    
-    if (frand() < 0.001 && PetalTracker::get_count(sim, PetalID::kUniqueBasic) == 0)
-        ent.set_inventory(0, PetalID::kUniqueBasic);
-    for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i)
-        PetalTracker::add_petal(sim, ent.get_inventory(i));
+    // Start with basics only for bots
+    for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i) {
+        ent.set_inventory(i, PetalID::kBasic);
+        PetalTracker::add_petal(sim, PetalID::kBasic);
+    }
     return ent;
 }
+
 
 void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
     camera.set_player(player.id);
