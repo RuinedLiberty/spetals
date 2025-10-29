@@ -23,7 +23,7 @@ float const BASE_BODY_DAMAGE = 25.0f;
 uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
 uint8_t const ENABLE_BOT_INVENTORY_OVERLAY = 0;
 
-float const DROP_RATE_MULTIPLIER = 5.0f;
+float const DROP_RATE_MULTIPLIER = 2.0f;
 float const DROP_RATE_MIN = 0.5f;
 
 std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
