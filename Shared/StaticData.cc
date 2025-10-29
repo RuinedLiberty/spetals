@@ -498,14 +498,12 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .radius = 20.0,
         .reload = 0.0,
         .count = 0,
-        .rarity = RarityID::kLegendary,
+        .rarity = RarityID::kUnique,
         .attributes = {
             .extra_range = 75,
             .equipment = EquipmentFlags::kThirdEye
         }
-    },
-
-    
+    },    
     {
         .name = "Cactus",
         .description = "Turns your flower poisonous. Enemies will take poison damage on contact",
@@ -1009,11 +1007,11 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .xp = 1,
         .drops = {
             PetalID::kHeavy,
-            PetalID::kRock
+            PetalID::kRock,
         },
         .drop_rates = {
             /* PetalID::kHeavy */ 10.00f,
-            /* PetalID::kRock */ 0.80f
+            /* PetalID::kRock */ 0.80f,
         },
         .attributes = {
             .stationary = 1
@@ -1179,7 +1177,8 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             PetalID::kIris,
             PetalID::kWeb,
             PetalID::kFaster,
-            PetalID::kTriweb
+            PetalID::kTriweb,
+            PetalID::kThirdEye
         },
         .drop_rates = {
             /* PetalID::kStinger */ 18.00f,
@@ -1187,6 +1186,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             /* PetalID::kWeb */ 9.00f,
             /* PetalID::kFaster */ 3.00f,
             /* PetalID::kTriweb */ 0.02f
+            /* PetalID::kThirdEye */ 0.003f
         },
         .attributes = { 
             .poison_damage = {

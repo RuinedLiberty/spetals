@@ -203,19 +203,16 @@ void GameInstance::add_client(Client *client) {
     ent.set_respawn_level(1);
     for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i)
         ent.set_inventory(i, PetalID::kBasic);
-    if (frand() < 0.001 && PetalTracker::get_count(&simulation, PetalID::kUniqueBasic) == 0)
-        ent.set_inventory(0, PetalID::kUniqueBasic);
     for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i)
         PetalTracker::add_petal(&simulation, ent.get_inventory(i));
         client->camera = ent.id;
     client->seen_arena = 0;
 
-            if (!client->account_id.empty()) {
+    if (!client->account_id.empty()) {
         AccountLink::map_camera(client->camera, client->account_id);
         _send_mob_gallery_for(client);
         _send_petal_gallery_for(client);
     }
-
 }
 
 void GameInstance::remove_client(Client *client) {
