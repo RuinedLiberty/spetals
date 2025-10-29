@@ -83,12 +83,32 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 sim->request_delete(petal.id);
             }
             break;
-        case PetalID::kPollen:
-            if (BitMath::at(player.input, InputFlags::kAttacking) || BitMath::at(player.input, InputFlags::kDefending)) {
+                case PetalID::kPollen: {
+            bool isAttacking = BitMath::at(player.input, InputFlags::kAttacking);
+            bool isDefending = BitMath::at(player.input, InputFlags::kDefending);
+            if (isAttacking || isDefending) {
+                // Gentle, short-lived push on release
+                Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());
+                if (delta.x == 0 && delta.y == 0)
+                    delta.unit_normal(player.heading_angle);
+                else
+                    delta.normalize();
+
+                float const attackPushMag = 25.0f;
+                float const defendPushMag = 12.0f;
+                float const pushMag = isAttacking ? attackPushMag : defendPushMag;
+                float const dir = isAttacking ? 1.0f : -1.0f;
+
+                petal.velocity.set(0, 0);
+                petal.acceleration.set(0, 0);
+                petal.velocity += delta * (pushMag * dir);
                 petal.friction = DEFAULT_FRICTION;
+                petal.projectile_decay_active = 0;
                 entity_set_despawn_tick(petal, 4.0 * TPS);
+                petal.secondary_reload = 0;
             }
             break;
+        }
         case PetalID::kPeas:
         case PetalID::kPoisonPeas:
         case PetalID::kLPeas:
