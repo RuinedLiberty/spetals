@@ -179,11 +179,24 @@ void Game::render_game() {
         render_name(renderer, ent);
     });
 
-    // Debug: draw cameras' vision rectangles last so they are not occluded
-    if (Game::show_debug) {
+        // Debug: draw server-true mob hitboxes and cameras' vision rectangles
+        if (Game::show_debug && ENABLE_MOB_HITBOX_DEBUG) {
+
+        // True RAW mob hitbox (uses server-sent physics radius, no client lerp)
+        simulation.for_each<kMob>([](Simulation *sim, Entity const &ent){
+            RenderContext dbg(&renderer);
+            renderer.translate(ent.get_x(), ent.get_y());
+            renderer.set_stroke(0xffff0000); // red outline
+            renderer.set_line_width(2.0f);
+            renderer.begin_path();
+            renderer.arc(0, 0, ent.get_radius().anchor());
+            renderer.stroke();
+        });
+
+        // Draw cameras' vision rectangles last so they are not occluded
         simulation.for_each<kCamera>([](Simulation *sim, Entity const &cam){
             RenderContext dbg(&renderer);
-                        // Use the same FOV rectangle bots use for queries (1920x1080 reference)
+            // Use the same FOV rectangle bots use for queries (1920x1080 reference)
             float half_w = 960.0f / cam.get_fov();
             float half_h = 540.0f / cam.get_fov();
             float cx = cam.get_camera_x();
@@ -195,6 +208,7 @@ void Game::render_game() {
             renderer.stroke();
         });
     }
+
 }
 
 void Game::render_title_screen() {

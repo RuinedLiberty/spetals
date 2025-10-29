@@ -22,6 +22,7 @@ extern float const BASE_PETAL_ROTATION_SPEED;
 extern float const BASE_FOV;
 extern float const BASE_HEALTH;
 extern float const BASE_BODY_DAMAGE;
+extern uint8_t const ENABLE_MOB_HITBOX_DEBUG;
 
 extern std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA;
 extern std::array<struct MobData, MobID::kNumMobs> const MOB_DATA;

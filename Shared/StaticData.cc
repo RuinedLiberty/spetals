@@ -19,6 +19,7 @@ float const BASE_PETAL_ROTATION_SPEED = 2.5f;
 float const BASE_FOV = 0.9f;
 float const BASE_HEALTH = 100.0f;
 float const BASE_BODY_DAMAGE = 25.0f;
+uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
 
 std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {

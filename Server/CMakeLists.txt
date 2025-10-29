@@ -22,7 +22,7 @@ set(SOURCES
     Process/Petal.cc
     Process/Score.cc
     Process/Segment.cc
-        Bots/BotManager.cc
+    Bots/BotManager.cc
     Bots/Priorities.cc
     Bots/ForwardShims.cc
 
@@ -61,6 +61,7 @@ else()
     set(SOURCES ${SOURCES} Native.cc AuthDB.cc)
 endif()
 
+set(GENERAL_SPATIAL_HASH ON)
 if(GENERAL_SPATIAL_HASH)
     set(SOURCES ${SOURCES} SpatialHashCanonical.cc)
 else()
@@ -85,13 +86,7 @@ if(WASM_SERVER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWASM_SERVER=1")
     # IMPORTANT: Do NOT enable closure/minification when using large EM_ASM blocks with Node code
     # It mangles property names like sqlite3.verbose at runtime. Keep readable JS.
-                                                                                add_link_options(-sEXIT_RUNTIME=0 -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message,_set_ws_account,_wasm_gallery_mark_for,_wasm_send_gallery_for,_wasm_petal_gallery_mark_for,_wasm_send_petal_gallery_for,_malloc,_free -sEXPORTED_RUNTIME_METHODS=lengthBytesUTF8,stringToUTF8 -sENVIRONMENT=node)
-
-
-
-
-
-
+    add_link_options(-sEXIT_RUNTIME=0 -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message,_set_ws_account,_wasm_gallery_mark_for,_wasm_send_gallery_for,_wasm_petal_gallery_mark_for,_wasm_send_petal_gallery_for,_malloc,_free -sEXPORTED_RUNTIME_METHODS=lengthBytesUTF8,stringToUTF8 -sENVIRONMENT=node)
     add_executable(gardn-server ${SOURCES})
     set(CMAKE_EXECUTABLE_SUFFIX ".js")
 else()
