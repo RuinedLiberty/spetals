@@ -38,7 +38,7 @@ static float get_damage_factor() {
 }
 
 static Ui::Element *make_petal_stat_container(PetalID::T id) {
-    std::vector<Ui::Element *> stats = {new Ui::Element(0,10)};
+    std::vector<Ui::Element *> stats = {};
     struct PetalData const &petal_data = PETAL_DATA[id];
     struct PetalAttributes const &attrs = petal_data.attributes;
     if (petal_data.damage > 0) {
@@ -145,7 +145,7 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::StaticText(BODY_FONT, format_pct(attrs.reload_reduction * 100))
         }, 0, 5, { .h_justify = Style::Left }));
     }
-    return new Ui::VContainer(stats, 0, 2, { .h_justify = Style::Left });
+    return new Ui::VContainer(stats, 0, 4, { .h_justify = Style::Left });
 }
 
 static void make_petal_tooltip(PetalID::T id) {
@@ -168,7 +168,7 @@ static void make_petal_tooltip(PetalID::T id) {
         new Ui::StaticText(BODY_FONT, RARITY_NAMES[PETAL_DATA[id].rarity], { .fill = RARITY_COLORS[PETAL_DATA[id].rarity], .h_justify = Style::Left }),
         new Ui::Element(0,10),
         new Ui::StaticText(BODY_FONT, PETAL_DATA[id].description, { .fill = 0xffffffff, .h_justify = Style::Left }),
-        new Ui::Element(0,10),
+        new Ui::Element(0,8),
         make_petal_stat_container(id)
     }, 5, 2);
     tooltip->style.fill = 0x80000000;
