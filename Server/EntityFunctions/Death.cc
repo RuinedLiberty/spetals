@@ -112,11 +112,13 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             struct MobData const &mob_data = MOB_DATA[ent.get_mob_id()];
             std::vector<PetalID::T> success_drops = {};
                         // drop_rates are stored as percentages. Apply global multiplier and floor at runtime.
-            for (uint32_t i = 0; i < mob_data.drops.size(); ++i) {
-                float adjusted_pct = apply_drop_rate_modifiers(mob_data.drop_rates[i]);
+                        for (uint32_t i = 0; i < mob_data.drops.size(); ++i) {
+                PetalID::T drop_id = mob_data.drops[i];
+                uint8_t rarity = PETAL_DATA[drop_id].rarity;
+                float adjusted_pct = apply_drop_rate_modifiers(mob_data.drop_rates[i], rarity);
                 float chance_prob = adjusted_pct / 100.0f;
                 if (frand() < chance_prob)
-                    success_drops.push_back(mob_data.drops[i]);
+                    success_drops.push_back(drop_id);
             }
             _alloc_drops(sim, success_drops, ent.get_x(), ent.get_y());
         }

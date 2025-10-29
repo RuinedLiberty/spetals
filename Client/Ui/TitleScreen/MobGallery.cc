@@ -44,15 +44,20 @@ static Element *make_mob_drops(MobID::T id) {
     for (uint32_t i = 0; i < data.drops.size(); ++i)
         order.push_back(i);
     
-        std::sort(order.begin(), order.end(), [&](uint8_t a, uint8_t b) {
-        float ar = apply_drop_rate_modifiers(data.drop_rates[a]);
-        float br = apply_drop_rate_modifiers(data.drop_rates[b]);
-        return ar > br;
+    std::sort(order.begin(), order.end(), [&](uint8_t a, uint8_t b) {
+        uint8_t ra = PETAL_DATA[data.drops[a]].rarity;
+        uint8_t rb = PETAL_DATA[data.drops[b]].rarity;
+        if (ra != rb) return ra < rb;
+        float ar = apply_drop_rate_modifiers(data.drop_rates[a], ra);
+        float br = apply_drop_rate_modifiers(data.drop_rates[b], rb);
+        if (ar != br) return ar > br;
+        return std::strcmp(PETAL_DATA[data.drops[a]].name, PETAL_DATA[data.drops[b]].name) < 0;
     });
 
     for (uint32_t i = 0; i < data.drops.size(); ++i) {
         uint32_t j = order[i];
-                float adj = apply_drop_rate_modifiers(data.drop_rates[j]);
+        uint8_t rr = PETAL_DATA[data.drops[j]].rarity;
+        float adj = apply_drop_rate_modifiers(data.drop_rates[j], rr);
         elt->add_child(new Ui::VContainer({
             new GalleryPetal(data.drops[j], 45),
             new StaticText(12, format_pct(adj))

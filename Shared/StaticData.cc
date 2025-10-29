@@ -23,8 +23,19 @@ float const BASE_BODY_DAMAGE = 25.0f;
 uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
 uint8_t const ENABLE_BOT_INVENTORY_OVERLAY = 0;
 
-float const DROP_RATE_MULTIPLIER = 2.0f;
-float const DROP_RATE_MIN = 0.5f;
+float const DROP_RATE_MULTIPLIER_COMMON = 3.0f;
+float const DROP_RATE_MULTIPLIER_UNUSUAL = 3.5f;
+float const DROP_RATE_MULTIPLIER_RARE = 4.0f;
+float const DROP_RATE_MULTIPLIER_EPIC = 5.0f;
+float const DROP_RATE_MULTIPLIER_LEGENDARY = 5.0f;
+float const DROP_RATE_MULTIPLIER_UNIQUE = 10.0f;
+
+float const DROP_RATE_MIN_COMMON = 0.0f;
+float const DROP_RATE_MIN_UNUSUAL = 0.0f;
+float const DROP_RATE_MIN_RARE = 0.0f;
+float const DROP_RATE_MIN_EPIC = 0.5f;
+float const DROP_RATE_MIN_LEGENDARY = 0.1f;
+float const DROP_RATE_MIN_UNIQUE = 0.0f;
 
 std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
@@ -1124,14 +1135,10 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .xp = 4,
         .drops = {
             PetalID::kSand,
-            PetalID::kFaster,
-            PetalID::kSalt,
             PetalID::kTriFaster,
         },
         .drop_rates = {
             /* PetalID::kSand */ 12.00f,
-            /* PetalID::kFaster */ 4.00f,
-            /* PetalID::kSalt */ 8.00f,
             /* PetalID::kTriFaster */ 0.03f,
         },
         .attributes = {
@@ -1364,9 +1371,19 @@ float hp_at_level(uint32_t level) {
     return BASE_HEALTH + level;
 }
 
-float apply_drop_rate_modifiers(float base_pct) {
-    float v = base_pct * DROP_RATE_MULTIPLIER;
-    if (v < DROP_RATE_MIN) v = DROP_RATE_MIN;
+float apply_drop_rate_modifiers(float base_pct, uint8_t rarity) {
+    float mult = DROP_RATE_MULTIPLIER_COMMON;
+    float floor_val = DROP_RATE_MIN_COMMON;
+    switch (rarity) {
+        case RarityID::kUnusual:   mult = DROP_RATE_MULTIPLIER_UNUSUAL; floor_val = DROP_RATE_MIN_UNUSUAL; break;
+        case RarityID::kRare:      mult = DROP_RATE_MULTIPLIER_RARE;     floor_val = DROP_RATE_MIN_RARE; break;
+        case RarityID::kEpic:      mult = DROP_RATE_MULTIPLIER_EPIC;     floor_val = DROP_RATE_MIN_EPIC; break;
+        case RarityID::kLegendary: mult = DROP_RATE_MULTIPLIER_LEGENDARY;floor_val = DROP_RATE_MIN_LEGENDARY; break;
+        case RarityID::kUnique:    mult = DROP_RATE_MULTIPLIER_UNIQUE;   floor_val = DROP_RATE_MIN_UNIQUE; break;
+        default:                   mult = DROP_RATE_MULTIPLIER_COMMON;   floor_val = DROP_RATE_MIN_COMMON; break;
+    }
+    float v = base_pct * mult;
+    if (v < floor_val) v = floor_val;
     if (v > 100.0f) v = 100.0f;
     return v;
 }

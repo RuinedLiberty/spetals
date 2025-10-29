@@ -25,10 +25,21 @@ extern float const BASE_HEALTH;
 extern float const BASE_BODY_DAMAGE;
 extern uint8_t const ENABLE_MOB_HITBOX_DEBUG;
 extern uint8_t const ENABLE_BOT_INVENTORY_OVERLAY;
-extern float const DROP_RATE_MULTIPLIER;
-extern float const DROP_RATE_MIN;
+extern float const DROP_RATE_MULTIPLIER_COMMON;
 
-float apply_drop_rate_modifiers(float base_pct);
+extern float const DROP_RATE_MULTIPLIER_UNUSUAL;
+extern float const DROP_RATE_MULTIPLIER_RARE;
+extern float const DROP_RATE_MULTIPLIER_EPIC;
+extern float const DROP_RATE_MULTIPLIER_LEGENDARY;
+extern float const DROP_RATE_MULTIPLIER_UNIQUE;
+extern float const DROP_RATE_MIN_COMMON;
+extern float const DROP_RATE_MIN_UNUSUAL;
+extern float const DROP_RATE_MIN_RARE;
+extern float const DROP_RATE_MIN_EPIC;
+extern float const DROP_RATE_MIN_LEGENDARY;
+extern float const DROP_RATE_MIN_UNIQUE;
+
+float apply_drop_rate_modifiers(float base_pct, uint8_t rarity);
 
 extern std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA;
 extern std::array<struct MobData, MobID::kNumMobs> const MOB_DATA;
