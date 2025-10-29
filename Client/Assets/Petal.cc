@@ -59,6 +59,7 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
         case PetalID::kLPeas: Petals::LPeas(ctx, r); break;
         case PetalID::kSoil: Petals::Soil(ctx, r); break;
         case PetalID::kTriFaster: Petals::TriFaster(ctx, r); break;
+        case PetalID::kPoisonTricac: Petals::PoisonTricac(ctx, r); break;
         default:
             assert(id < PetalID::kNumPetals);
             assert(!"didn't cover petal render");
@@ -71,17 +72,25 @@ void draw_static_petal(PetalID::T id, Renderer &ctx) {
     struct PetalData const &data = PETAL_DATA[id];
     uint32_t count = data.count;
     if (count == 0) count = 1;
-    for (uint32_t i = 0; i < count; ++i) {
-        RenderContext context(&ctx);
-        float rad = 10;
-        if (data.attributes.clump_radius != 0)
-            rad = data.attributes.clump_radius;
-        ctx.rotate(i * 2 * M_PI / data.count);
-        if (data.count > 1) ctx.translate(rad, 0);
+    // Rotate the entire clump/group by icon_angle so multi-petal arrangements rotate together
+    {
+        RenderContext group(&ctx);
         ctx.rotate(data.attributes.icon_angle);
-        draw_static_petal_single(id, ctx);
+        for (uint32_t i = 0; i < count; ++i) {
+            RenderContext r(&ctx);
+            float rad = 10;
+            if (data.attributes.clump_radius_icon != 0)
+                rad = data.attributes.clump_radius_icon;
+            else if (data.attributes.clump_radius != 0)
+                rad = data.attributes.clump_radius;
+            ctx.rotate(i * 2 * M_PI / data.count);
+            if (data.count > 1) ctx.translate(rad, 0);
+            // per-petal rotation removed so the whole group rotates instead
+            draw_static_petal_single(id, ctx);
+        }
     }
 }
+
 
 void draw_loadout_background(Renderer &ctx, uint8_t id, float reload) {
     RenderContext c(&ctx);
@@ -108,13 +117,19 @@ void draw_loadout_background(Renderer &ctx, uint8_t id, float reload) {
             ctx.fill();
         }
     }
-    ctx.translate(0, -5);
+        ctx.translate(0, -5);
     {
         RenderContext r(&ctx);
         ctx.scale(0.833);
-        if (PETAL_DATA[id].radius > 20) ctx.scale(20 / PETAL_DATA[id].radius);
+        float base_r = PETAL_DATA[id].radius;
+        float icon_sz = PETAL_DATA[id].attributes.icon_size;
+        float group_scale = icon_sz > 0 ? (icon_sz / base_r) : 1.0f;
+        float desired_r = base_r * group_scale;
+        float clamp_scale = desired_r > 20 ? (20.0f / desired_r) : 1.0f;
+        ctx.scale(group_scale * clamp_scale);
         draw_static_petal(id, ctx);
     }
+
     float text_width = 12 * Renderer::get_ascii_text_size(PETAL_DATA[id].name);
     if (text_width < 50) text_width = 12;
     else text_width = 12 * 50 / text_width;

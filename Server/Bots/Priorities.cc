@@ -254,6 +254,55 @@ void apply_rearrange(Context &ctx) {
     HealPhaseState &hs = g_heal_state[ctx.player.id.id];
     if (hpRatio < LOW_HP) { hs.was_low = true; hs.cleanup_done = false; }
 
+    // Inventory unclog: if inventory is full and a visible drop has higher rarity
+    // than the worst item we hold, delete the lowest-rarity petal to make room.
+    auto is_full = [&]()->bool {
+        for (uint8_t i = 0; i < mainN + MAX_SLOT_COUNT; ++i)
+            if (ctx.player.get_loadout_ids(i) == PetalID::kNone) return false;
+        return true;
+    };
+
+        uint8_t worst_idx_all = 255; uint8_t worst_r_all = 255;
+    for (uint8_t i = 0; i < mainN + MAX_SLOT_COUNT; ++i) {
+        PetalID::T pid = ctx.player.get_loadout_ids(i);
+        if (pid == PetalID::kNone) continue;
+        uint8_t r = r_of(pid);
+        if (r < worst_r_all) { worst_r_all = r; worst_idx_all = i; }
+    }
+
+    if (is_full()) {
+
+        // Case 1: We are already overlapping any drop -> free a slot immediately.
+        bool overlapping_drop = false;
+        ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 10, ctx.half_h + 10, [&](Simulation *sm, Entity &e){
+            if (overlapping_drop) return;
+            if (!sm->ent_alive(e.id)) return; if (!e.has_component(kDrop)) return; if (!in_fov(ctx, e)) return;
+            float dx = e.get_x() - ctx.player.get_x(); float dy = e.get_y() - ctx.player.get_y();
+            float thr = ctx.player.get_radius() + e.get_radius() + 1.0f;
+            if (dx*dx + dy*dy <= thr*thr) overlapping_drop = true;
+        });
+                if (overlapping_drop && worst_idx_all != 255) {
+            ctx.player.set_loadout_ids(worst_idx_all, PetalID::kNone);
+            return;
+        }
+
+        // Case 2: If we can see a higher-rarity drop than our worst, free a slot to go get it.
+        uint8_t best_visible_r = 0;
+        ctx.sim->spatial_hash.query(ctx.cx, ctx.cy, ctx.half_w + 50, ctx.half_h + 50, [&](Simulation *sm, Entity &e){
+            if (!sm->ent_alive(e.id)) return; if (!e.has_component(kDrop)) return; if (!in_fov(ctx, e)) return;
+            PetalID::T pid = e.get_drop_id(); if (pid == PetalID::kNone) return;
+            uint8_t r = rarity_of(pid);
+            if (r > best_visible_r) best_visible_r = r;
+        });
+                if (best_visible_r > worst_r_all && worst_idx_all != 255) {
+            ctx.player.set_loadout_ids(worst_idx_all, PetalID::kNone);
+            return; // free a slot; pickup will succeed on collision
+        }
+
+    }
+
+
+
     // ============================
     // Priority 4 (LOW HP): Probabilistic MULTI-EQUIP of pure-heals from secondary
     // ============================

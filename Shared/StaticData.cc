@@ -5,11 +5,11 @@
 uint32_t const MAX_LEVEL = 99;
 uint32_t const TPS = 20;
 
-// Default number of CPU-controlled player bots to spawn
 uint32_t const BOT_COUNT = 20;
 
 float const PETAL_DISABLE_DELAY = 45.0f; //seconds
-float const PLAYER_ACCELERATION = 5.0f;
+float const PLAYER_ACCELERATION = 5.38f;
+float const MOB_ACCELERATION = 5.38f;
 float const DEFAULT_FRICTION = 1.0f/3.0f;
 float const SUMMON_RETREAT_RADIUS = 600.0f;
 float const DIGGER_SPAWN_CHANCE = 0.25f;
@@ -19,11 +19,23 @@ float const BASE_PETAL_ROTATION_SPEED = 2.5f;
 float const BASE_FOV = 0.9f;
 float const BASE_HEALTH = 100.0f;
 float const BASE_BODY_DAMAGE = 25.0f;
+
 uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
 uint8_t const ENABLE_BOT_INVENTORY_OVERLAY = 0;
 
-float const DROP_RATE_MULTIPLIER = 5.0f; // e.g., 5.0f -> multiply base chances by 5
-float const DROP_RATE_MIN = 1.0f;        // e.g., 1.0f -> floor at 1% for any base chance
+float const DROP_RATE_MULTIPLIER_COMMON = 3.0f;
+float const DROP_RATE_MULTIPLIER_UNUSUAL = 3.5f;
+float const DROP_RATE_MULTIPLIER_RARE = 4.0f;
+float const DROP_RATE_MULTIPLIER_EPIC = 5.0f;
+float const DROP_RATE_MULTIPLIER_LEGENDARY = 5.0f;
+float const DROP_RATE_MULTIPLIER_UNIQUE = 10.0f;
+
+float const DROP_RATE_MIN_COMMON = 0.0f;
+float const DROP_RATE_MIN_UNUSUAL = 0.0f;
+float const DROP_RATE_MIN_RARE = 0.0f;
+float const DROP_RATE_MIN_EPIC = 0.5f;
+float const DROP_RATE_MIN_LEGENDARY = 0.1f;
+float const DROP_RATE_MIN_UNIQUE = 0.0f;
 
 std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
@@ -257,11 +269,12 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 4,
         .rarity = RarityID::kRare,
         .attributes = {
-            .icon_angle = 0.2,
+            .icon_angle = 0.25,
             .clump_radius = 8,
-            .secondary_reload = 0.1,
+            .secondary_reload = 0.5,
             .defend_only = 1,
-            .split_projectile = 1
+            .split_projectile = 1,
+            .icon_size = 7.5,
         }
     },
     {
@@ -338,7 +351,6 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             .spawns = MobID::kSoldierAnt
         }
     },
-    
     {
         .name = "Pollen",
         .description = "Asthmatics beware",
@@ -364,13 +376,15 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .rarity = RarityID::kEpic,
         .attributes = {
             .clump_radius = 8,
-            .secondary_reload = 0.1,
+            .secondary_reload = 0.5,
             .poison_damage = {
                 .damage = 20.0,
                 .time = 0.5
             },
             .defend_only = 1,
             .split_projectile = 1,
+            .icon_angle = 0.25,
+            .icon_size = 7.5
         }
     },
     {
@@ -473,7 +487,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 3,
         .rarity = RarityID::kLegendary,
         .attributes = {
-            .clump_radius = 10,
+            .clump_radius = 15,
+            .clump_radius_icon = 10,
             .extra_health = 40,
         }
     },
@@ -496,14 +511,12 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .radius = 20.0,
         .reload = 0.0,
         .count = 0,
-        .rarity = RarityID::kLegendary,
+        .rarity = RarityID::kUnique,
         .attributes = {
             .extra_range = 75,
             .equipment = EquipmentFlags::kThirdEye
         }
-    },
-
-    
+    },    
     {
         .name = "Cactus",
         .description = "Turns your flower poisonous. Enemies will take poison damage on contact",
@@ -675,7 +688,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 1.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
-                .attributes = {
+        .attributes = {
             .reload_reduction = 0.21f,
             .icon_angle = -1
         }
@@ -691,11 +704,11 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .rarity = RarityID::kLegendary,
         .attributes = {
             .clump_radius = 10,
-            .secondary_reload = 0.1,
+            .secondary_reload = 0.5,
             .poison_damage = { .damage = 35.0, .time = 1.0 },
             .defend_only = 1,
             .split_projectile = 1,
-            .icon_angle = 0.2
+            .icon_angle = 0.25
         }
     },
     {
@@ -722,9 +735,27 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 3,
         .rarity = RarityID::kLegendary,
         .attributes = {
+            .clump_radius = 6,
             .extra_rotation_speed = 1.7f
         }
-    }, 
+    },
+        {
+        .name = "Cactus",
+        .description = "A unique trio of poisonous cacti",
+        .health = 20.0,
+        .damage = 7.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 20,
+            .clump_radius_icon = 10,
+            .extra_health = 60,
+            .extra_petal_radius = 4.0f,
+            .poison_damage = { .damage = 2.0, .time = 6.0 }
+        }
+    }
 }};
 
 std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
@@ -983,14 +1014,16 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             PetalID::kMissile,
             PetalID::kPoisonCactus,
             PetalID::kStinger,
-            PetalID::kTricac
+            PetalID::kTricac,
+            PetalID::kPoisonTricac
         },
         .drop_rates = {
             /* PetalID::kCactus */ 3.00f,
             /* PetalID::kMissile */ 0.90f,
             /* PetalID::kPoisonCactus */ 0.10f,
             /* PetalID::kStinger */ 5.00f,
-            /* PetalID::kTricac */ 0.005f
+            /* PetalID::kTricac */ 0.005f,
+            /* PetalID::kPoisonTricac */ 0.001f
         },
         .attributes = {
             .stationary = 1
@@ -1006,11 +1039,11 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .xp = 1,
         .drops = {
             PetalID::kHeavy,
-            PetalID::kRock
+            PetalID::kRock,
         },
         .drop_rates = {
             /* PetalID::kHeavy */ 10.00f,
-            /* PetalID::kRock */ 0.80f
+            /* PetalID::kRock */ 0.80f,
         },
         .attributes = {
             .stationary = 1
@@ -1102,16 +1135,12 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .damage = 10.0,
         .radius = {35.0},
         .xp = 4,
-                .drops = {
+        .drops = {
             PetalID::kSand,
-            PetalID::kFaster,
-            PetalID::kSalt,
             PetalID::kTriFaster,
         },
-                .drop_rates = {
+        .drop_rates = {
             /* PetalID::kSand */ 12.00f,
-            /* PetalID::kFaster */ 4.00f,
-            /* PetalID::kSalt */ 8.00f,
             /* PetalID::kTriFaster */ 0.03f,
         },
         .attributes = {
@@ -1176,14 +1205,16 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             PetalID::kIris,
             PetalID::kWeb,
             PetalID::kFaster,
-            PetalID::kTriweb
+            PetalID::kTriweb,
+            PetalID::kThirdEye
         },
         .drop_rates = {
             /* PetalID::kStinger */ 18.00f,
             /* PetalID::kIris */ 12.00f,
             /* PetalID::kWeb */ 9.00f,
             /* PetalID::kFaster */ 3.00f,
-            /* PetalID::kTriweb */ 0.02f
+            /* PetalID::kTriweb */ 0.02f,
+            /* PetalID::kThirdEye */ 0.003f
         },
         .attributes = { 
             .poison_damage = {
@@ -1342,9 +1373,19 @@ float hp_at_level(uint32_t level) {
     return BASE_HEALTH + level;
 }
 
-float apply_drop_rate_modifiers(float base_pct) {
-    float v = base_pct * DROP_RATE_MULTIPLIER;
-    if (v < DROP_RATE_MIN) v = DROP_RATE_MIN;
+float apply_drop_rate_modifiers(float base_pct, uint8_t rarity) {
+    float mult = DROP_RATE_MULTIPLIER_COMMON;
+    float floor_val = DROP_RATE_MIN_COMMON;
+    switch (rarity) {
+        case RarityID::kUnusual:   mult = DROP_RATE_MULTIPLIER_UNUSUAL; floor_val = DROP_RATE_MIN_UNUSUAL; break;
+        case RarityID::kRare:      mult = DROP_RATE_MULTIPLIER_RARE;     floor_val = DROP_RATE_MIN_RARE; break;
+        case RarityID::kEpic:      mult = DROP_RATE_MULTIPLIER_EPIC;     floor_val = DROP_RATE_MIN_EPIC; break;
+        case RarityID::kLegendary: mult = DROP_RATE_MULTIPLIER_LEGENDARY;floor_val = DROP_RATE_MIN_LEGENDARY; break;
+        case RarityID::kUnique:    mult = DROP_RATE_MULTIPLIER_UNIQUE;   floor_val = DROP_RATE_MIN_UNIQUE; break;
+        default:                   mult = DROP_RATE_MULTIPLIER_COMMON;   floor_val = DROP_RATE_MIN_COMMON; break;
+    }
+    float v = base_pct * mult;
+    if (v < floor_val) v = floor_val;
     if (v > 100.0f) v = 100.0f;
     return v;
 }

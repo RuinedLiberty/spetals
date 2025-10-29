@@ -1,4 +1,5 @@
 #include <Server/EntityFunctions.hh>
+#include <Server/PetalTracker.hh>
 
 #include <Shared/Simulation.hh>
 #include <Shared/Entity.hh>
@@ -31,8 +32,7 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
 static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
     if (!sim->ent_alive(player.get_parent())) return;
     if (drop.immunity_ticks > 0) return;
-
-    for (uint32_t i = 0; i <  player.get_loadout_count() + MAX_SLOT_COUNT; ++i) {
+        for (uint32_t i = 0; i <  player.get_loadout_count() + MAX_SLOT_COUNT; ++i) {
         if (player.get_loadout_ids(i) != PetalID::kNone) continue;
         // Assign petal into an empty slot
         PetalID::T obtained = drop.get_drop_id();
@@ -75,7 +75,7 @@ static void _deal_push(Entity &ent, Vector knockback, float mass_ratio, float sc
 
 static void _deal_knockback(Entity &ent, Vector knockback, float mass_ratio) {
     if (fabsf(mass_ratio) < 0.01) return;
-    float scale = PLAYER_ACCELERATION * 2;
+    float scale = MOB_ACCELERATION * 2;
     knockback *= scale * mass_ratio;
     ent.collision_velocity += knockback;
     ent.velocity += knockback * 2;
@@ -84,9 +84,9 @@ static void _deal_knockback(Entity &ent, Vector knockback, float mass_ratio) {
 static void _cancel_movement(Entity &ent, Vector dir, Vector add) {
     Vector push = dir;
     push.normalize();
-    float dot = fclamp(push.x * add.x + push.y * add.y, PLAYER_ACCELERATION * 0.5, PLAYER_ACCELERATION * 25);
-    ent.velocity += push * (PLAYER_ACCELERATION + dot * 2);
-    ent.collision_velocity += push * (0.5 * PLAYER_ACCELERATION);
+    float dot = fclamp(push.x * add.x + push.y * add.y, MOB_ACCELERATION * 0.5f, MOB_ACCELERATION * 25.0f);
+    ent.velocity += push * (MOB_ACCELERATION + dot * 2);
+    ent.collision_velocity += push * (0.5f * MOB_ACCELERATION);
 }
 
 void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {

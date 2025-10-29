@@ -14,7 +14,8 @@
 #include <cmath>
 
 void render_petal(Renderer &ctx, Entity const &ent) {
-    ctx.scale(ent.get_radius() / PETAL_DATA[ent.get_petal_id()].radius);
+    float base_r = PETAL_DATA[ent.get_petal_id()].radius;
+    ctx.scale(ent.get_radius() / base_r);
     if (ent.get_split_projectile()) draw_static_petal(ent.get_petal_id(), ctx);
     else draw_static_petal_single(ent.get_petal_id(), ctx);
     if (PETAL_DATA[ent.get_petal_id()].rarity == RarityID::kUnique && frand() < fclamp(0.25 * Ui::dt/16.67, 0, 1))

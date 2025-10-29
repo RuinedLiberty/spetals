@@ -38,7 +38,8 @@ namespace Game {
     extern uint8_t loadout_count;
     extern uint8_t simulation_ready;
     extern uint8_t on_game_screen;
-    extern uint8_t show_debug;
+        extern uint8_t show_debug;
+    extern uint8_t show_tooltip_stats;
     
     void init();
     void reset();

@@ -27,13 +27,12 @@ static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops
         assert(id != PetalID::kNone && id < PetalID::kNumPetals);
 #endif
     size_t count = success_drops.size();
-    for (size_t i = count; i > 0; --i) {
+        for (size_t i = count; i > 0; --i) {
         PetalID::T drop_id = success_drops[i - 1];
         if (PETAL_DATA[drop_id].rarity == RarityID::kUnique && PetalTracker::get_count(sim, drop_id) > 0) {
             success_drops[i - 1] = success_drops[count - 1];
             --count;
             success_drops.pop_back();
-            PetalTracker::remove_petal(sim, drop_id);
         }
     }
     DEBUG_ONLY(assert(success_drops.size() == count);)
@@ -113,11 +112,13 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             struct MobData const &mob_data = MOB_DATA[ent.get_mob_id()];
             std::vector<PetalID::T> success_drops = {};
                         // drop_rates are stored as percentages. Apply global multiplier and floor at runtime.
-            for (uint32_t i = 0; i < mob_data.drops.size(); ++i) {
-                float adjusted_pct = apply_drop_rate_modifiers(mob_data.drop_rates[i]);
+                        for (uint32_t i = 0; i < mob_data.drops.size(); ++i) {
+                PetalID::T drop_id = mob_data.drops[i];
+                uint8_t rarity = PETAL_DATA[drop_id].rarity;
+                float adjusted_pct = apply_drop_rate_modifiers(mob_data.drop_rates[i], rarity);
                 float chance_prob = adjusted_pct / 100.0f;
                 if (frand() < chance_prob)
-                    success_drops.push_back(mob_data.drops[i]);
+                    success_drops.push_back(drop_id);
             }
             _alloc_drops(sim, success_drops, ent.get_x(), ent.get_y());
         }
@@ -140,9 +141,9 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             if (ent.get_loadout_ids(i) != PetalID::kNone && ent.get_loadout_ids(i) != PetalID::kBasic && frand() < 0.95)
                 potential.push_back(ent.get_loadout_ids(i));
         }
-        for (uint32_t i = 0; i < ent.deleted_petals.size(); ++i) {
+                for (uint32_t i = 0; i < ent.deleted_petals.size(); ++i) {
             DEBUG_ONLY(assert(ent.deleted_petals[i] < PetalID::kNumPetals));
-            PetalTracker::remove_petal(sim, ent.deleted_petals[i]);
+            // Petal was already removed from PetalTracker at trash time
             if (ent.deleted_petals[i] != PetalID::kNone && ent.deleted_petals[i] != PetalID::kBasic && frand() < 0.95)
                 potential.push_back(ent.deleted_petals[i]);
         }
