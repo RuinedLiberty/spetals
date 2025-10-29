@@ -124,7 +124,8 @@ public:
 #define STORED \
     X(0, Game::nickname) \
     X(1, Input::keyboard_movement) \
-    X(2, Input::movement_helper)
+    X(2, Input::movement_helper) \
+    X(3, Game::show_tooltip_stats)
 
 
 
@@ -139,12 +140,13 @@ void Storage::retrieve() {
     // Petal and mob galleries are server-authoritative; do not load from local storage
 
     {
-        uint32_t len = StorageProtocol::retrieve("settings", 1);
+                uint32_t len = StorageProtocol::retrieve("settings", 1);
         if (len > 0) {
             Decoder reader(&StorageProtocol::buffer[0]);
             uint8_t opts = reader.read<uint8_t>();
             Input::movement_helper = BitMath::at(opts, 0);
             Input::keyboard_movement = BitMath::at(opts, 1);
+            Game::show_tooltip_stats = BitMath::at(opts, 2);
         }
     }
 
@@ -176,9 +178,11 @@ void Storage::set() {
     }
 
     {
-        Encoder writer(&StorageProtocol::buffer[0]);
+                Encoder writer(&StorageProtocol::buffer[0]);
         writer.write<uint8_t>(
-            Input::movement_helper | (Input::keyboard_movement << 1)
+            Input::movement_helper
+            | (Input::keyboard_movement << 1)
+            | (Game::show_tooltip_stats << 2)
         );
         StorageProtocol::store("settings", writer.at - writer.base);
     }

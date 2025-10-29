@@ -92,6 +92,7 @@ namespace Game {
     uint8_t simulation_ready = 0;
     uint8_t on_game_screen = 0;
     uint8_t show_debug = 0;
+    uint8_t show_tooltip_stats = 0;
 }
 
 using namespace Game;

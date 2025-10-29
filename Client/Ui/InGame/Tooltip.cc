@@ -145,7 +145,7 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::StaticText(BODY_FONT, format_pct(attrs.reload_reduction * 100))
         }, 0, 5, { .h_justify = Style::Left }));
     }
-    return new Ui::VContainer(stats, 0, 4, { .h_justify = Style::Left });
+    return new Ui::VContainer(stats, 0, 3, { .h_justify = Style::Left, .should_render = [](){ return Game::show_tooltip_stats; } });
 }
 
 static void make_petal_tooltip(PetalID::T id) {
@@ -168,7 +168,7 @@ static void make_petal_tooltip(PetalID::T id) {
         new Ui::StaticText(BODY_FONT, RARITY_NAMES[PETAL_DATA[id].rarity], { .fill = RARITY_COLORS[PETAL_DATA[id].rarity], .h_justify = Style::Left }),
         new Ui::Element(0,10),
         new Ui::StaticText(BODY_FONT, PETAL_DATA[id].description, { .fill = 0xffffffff, .h_justify = Style::Left }),
-        new Ui::Element(0,8),
+        new Ui::Element(0,8, { .should_render = [](){ return Game::show_tooltip_stats; } }),
         make_petal_stat_container(id)
     }, 5, 2);
     tooltip->style.fill = 0x80000000;
@@ -178,6 +178,6 @@ static void make_petal_tooltip(PetalID::T id) {
 }
 
 void Ui::make_petal_tooltips() {
-    for (PetalID::T i = 0; i < PetalID::kNumPetals; ++i)
+        for (PetalID::T i = 0; i < PetalID::kNumPetals; ++i)
         make_petal_tooltip(i);
 }

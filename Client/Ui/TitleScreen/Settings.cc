@@ -36,9 +36,13 @@ Element *Ui::make_settings_panel() {
             new Ui::ToggleButton(30, &Input::movement_helper),
             new Ui::StaticText(16, "Movement helper")
         }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::HContainer({
+            new Ui::HContainer({
             new Ui::ToggleButton(30, &Game::show_debug),
             new Ui::StaticText(16, "Debug stats")
+        }, 0, 10, {.h_justify = Style::Left }),
+            new Ui::HContainer({
+            new Ui::ToggleButton(30, &Game::show_tooltip_stats),
+            new Ui::StaticText(16, "Tooltip stats")
         }, 0, 10, {.h_justify = Style::Left }),
         new Ui::Button(140, 40,
             new Ui::StaticText(16, "Logout"),
