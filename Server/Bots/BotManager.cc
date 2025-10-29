@@ -241,15 +241,18 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
     } else if (!best.null()) {
 
         Entity &t = sim->get_ent(best);
-        Vector delta(t.get_x() - player.get_x(), t.get_y() - player.get_y());
+                Vector delta(t.get_x() - player.get_x(), t.get_y() - player.get_y());
         float dist = delta.magnitude();
 
-        float baseR = player.get_radius() + 40.0f;
+        // Radius-aware engagement distances
+        float playerR = player.get_radius();
+        float targetR = t.get_radius();
+        float base_contact = playerR + targetR; // where bodies would touch
         float extra_range = BitMath::at(player.get_equip_flags(), EquipmentFlags::kThirdEye) ? 75.0f : 0.0f;
-        float atkR = player.get_radius() + 100.0f + extra_range;
-        float safeBody = player.get_radius() + t.get_radius() + 6.0f;
-        float desiredDist = atkR * 0.92f;
-        float margin = 8.0f;
+        float attackOffset = 100.0f + extra_range; // legacy offset, now added on top of both radii
+        float desiredDist = base_contact + 0.92f * attackOffset;
+        float minKeepAway = base_contact + 12.0f; // hard "too close" threshold
+        float margin = 10.0f;
 
         bool isStationary = false;
         if (t.has_component(kMob)) {
@@ -261,31 +264,35 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
         if (dist > desiredDist + margin * 2) {
             Vector toT = delta; toT.set_magnitude(PLAYER_ACCELERATION);
             move += toT;
-        } else if (dist < std::max(baseR + margin, safeBody)) {
+        } else if (dist < minKeepAway + margin) {
             Vector away(player.get_x() - t.get_x(), player.get_y() - t.get_y());
             away.set_magnitude(PLAYER_ACCELERATION);
             move += away;
         } else {
-            if (isStationary) {
-                float err = dist - desiredDist;
-                if (std::fabs(err) > margin) {
-                    Vector dir = (err > 0)
-                        ? Vector(t.get_x() - player.get_x(), t.get_y() - player.get_y())
-                        : Vector(player.get_x() - t.get_x(), player.get_y() - t.get_y());
-                    dir.set_magnitude(PLAYER_ACCELERATION * 0.6f);
-                    move += dir;
-                }
-                Vector tang(-(t.get_y() - player.get_y()), (t.get_x() - player.get_x()));
-                tang.set_magnitude(PLAYER_ACCELERATION * 0.15f);
-                move += tang;
-            } else {
-                Vector tang(-(t.get_y() - player.get_y()), (t.get_x() - player.get_x()));
-                tang.set_magnitude(PLAYER_ACCELERATION * 0.25f);
-                move += tang;
+            // In the engagement band: apply gentle radial correction plus tangential motion
+            float err = dist - desiredDist;
+            if (std::fabs(err) > margin) {
+                Vector dir = (err > 0)
+                    ? Vector(t.get_x() - player.get_x(), t.get_y() - player.get_y())
+                    : Vector(player.get_x() - t.get_x(), player.get_y() - t.get_y());
+                dir.set_magnitude(PLAYER_ACCELERATION * (isStationary ? 0.6f : 0.35f));
+                move += dir;
             }
+            Vector tang(-(t.get_y() - player.get_y()), (t.get_x() - player.get_x()));
+            tang.set_magnitude(PLAYER_ACCELERATION * (isStationary ? 0.15f : 0.25f));
+            move += tang;
+        }
+
+        // Add mild repulsion from the target when very close to contact distance
+        if (dist < base_contact + 40.0f) {
+            Vector away(player.get_x() - t.get_x(), player.get_y() - t.get_y());
+            float closeness = fclamp((base_contact + 40.0f - dist) / 40.0f, 0.0f, 1.0f);
+            away.set_magnitude(PLAYER_ACCELERATION * 0.35f * closeness);
+            move += away;
         }
 
         Vector avoid(0,0);
+
         sim->spatial_hash.query(cx, cy, half_w + 50, half_h + 50, [&](Simulation *sm, Entity &m){
             if (!sm->ent_alive(m.id)) return;
             if (!m.has_component(kMob)) return;
@@ -308,13 +315,13 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
         micro.unit_normal(microAngle).set_magnitude(PLAYER_ACCELERATION * 0.08f);
         desired = desired * 0.95f + micro * 0.05f;
 
-        if (dist < safeBody) {
+                if (dist < minKeepAway) {
             attack = false; defend = true;
         } else {
-            float bandMargin = 6.0f;
-            bool inBand = (dist > baseR + bandMargin) && (dist < atkR - bandMargin);
-            float nearAttack = atkR + 100.0f;
-            float farNoAttack = atkR + 170.0f;
+            float bandMargin = 8.0f;
+            bool inBand = (dist > desiredDist - bandMargin) && (dist < desiredDist + bandMargin);
+            float nearAttack = desiredDist + 80.0f;  // permissive upper bound
+            float farNoAttack = desiredDist + 150.0f; // outside this, stop attacking
             bool allowAttack = (dist <= nearAttack);
             if (dist >= farNoAttack) allowAttack = false;
 
@@ -328,6 +335,7 @@ void compute_controls(Simulation *sim, Entity &camera, Bots::Priority::Decision 
                 attack = true; defend = false;
             }
         }
+
                 } else {
         // === PRIORITY 0.5: WANDER FULL SPEED ===
         // Smooth steering: only bias left when the next zone's boundary is approaching in view.
