@@ -13,6 +13,7 @@
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
+#include <Shared/StaticData.hh>
 
 #include <algorithm>
 
@@ -111,9 +112,10 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         if (!natural_despawn && !(BitMath::at(ent.flags, EntityFlags::kNoDrops))) {
             struct MobData const &mob_data = MOB_DATA[ent.get_mob_id()];
             std::vector<PetalID::T> success_drops = {};
-            // drop_rates are stored as percentages (e.g., 0.05 means 0.05%)
+                        // drop_rates are stored as percentages. Apply global multiplier and floor at runtime.
             for (uint32_t i = 0; i < mob_data.drops.size(); ++i) {
-                float chance_prob = mob_data.drop_rates[i] / 100.0f;
+                float adjusted_pct = apply_drop_rate_modifiers(mob_data.drop_rates[i]);
+                float chance_prob = adjusted_pct / 100.0f;
                 if (frand() < chance_prob)
                     success_drops.push_back(mob_data.drops[i]);
             }

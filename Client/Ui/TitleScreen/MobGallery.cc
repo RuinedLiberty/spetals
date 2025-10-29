@@ -7,6 +7,7 @@
 #include <Client/Assets/Assets.hh>
 #include <Client/Game.hh>
 #include <Client/StaticData.hh>
+#include <Shared/StaticData.hh>
 
 #include <algorithm>
 #include <cstring>
@@ -43,15 +44,18 @@ static Element *make_mob_drops(MobID::T id) {
     for (uint32_t i = 0; i < data.drops.size(); ++i)
         order.push_back(i);
     
-    std::sort(order.begin(), order.end(), [&](uint8_t a, uint8_t b) {
-        return data.drop_rates[a] > data.drop_rates[b];
+        std::sort(order.begin(), order.end(), [&](uint8_t a, uint8_t b) {
+        float ar = apply_drop_rate_modifiers(data.drop_rates[a]);
+        float br = apply_drop_rate_modifiers(data.drop_rates[b]);
+        return ar > br;
     });
 
     for (uint32_t i = 0; i < data.drops.size(); ++i) {
         uint32_t j = order[i];
+                float adj = apply_drop_rate_modifiers(data.drop_rates[j]);
         elt->add_child(new Ui::VContainer({
             new GalleryPetal(data.drops[j], 45),
-            new StaticText(12, format_pct(data.drop_rates[j]))
+            new StaticText(12, format_pct(adj))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     return elt;
