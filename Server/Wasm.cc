@@ -463,7 +463,6 @@ WebSocketServer::WebSocketServer() {
                         account_xp: totalXp|0,
                         account_level: lvl|0
                     };
-                    try { console.log('[WASM][ME] resp', out); } catch(e) {}
                     res.writeHead(200, { "Content-Type": "application/json" });
                     res.end(JSON.stringify(out));
                     return;
@@ -507,13 +506,13 @@ WebSocketServer::WebSocketServer() {
                         `;
                                                 db.all(sql, [limit], function(err, rows){
                             if (err) { try { console.error('[WASM][LB] db error', err); } catch(_) {} res.writeHead(500).end("DB error"); return; }
-                            try { console.log('[WASM][LB] rows', Array.isArray(rows) ? rows.length : 0, rows && rows.slice ? rows.slice(0,5) : rows); } catch(_) {}
+
                             const out = (rows||[]).map(function(r){
                                 const lvl = accountXpToLevel(r.xp || 0);
                                 const name = (r && r.uname ? String(r.uname) : (r && r.did ? String(r.did) : 'Unnamed'));
                                 return { name, level: lvl.level, xp: lvl.xp, xpNeeded: lvl.xpNeeded };
                             });
-                            try { console.log('[WASM][LB] response', out && out.slice ? out.slice(0,10) : out); } catch(_) {}
+
                             res.writeHead(200, { "Content-Type": "application/json" });
                             res.end(JSON.stringify(out));
                         });

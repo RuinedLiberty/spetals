@@ -160,10 +160,7 @@ void Game::init() {
     );
     title_ui_window.add_child(
         Ui::make_changelog()
-    );
-        title_ui_window.add_child(
-        Ui::make_github_link_button()
-    );
+        );
     // Account leaderboard (title screen only)
     title_ui_window.add_child(
         Ui::make_title_account_leaderboard()

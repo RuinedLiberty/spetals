@@ -6,7 +6,7 @@ uint32_t const MAX_LEVEL = 99;
 uint32_t const TPS = 20;
 
 uint32_t const BOT_COUNT = 20;
-uint32_t const ACCOUNT_XP_MULTIPLIER = 2;
+uint32_t const ACCOUNT_XP_MULTIPLIER = 30;
 
 float const PETAL_DISABLE_DELAY = 45.0f;
 float const PLAYER_ACCELERATION = 5.38f;

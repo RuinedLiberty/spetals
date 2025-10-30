@@ -14,8 +14,8 @@
 
 using namespace Ui;
 
-static constexpr uint32_t ACCOUNT_LB_SIZE = 10;
-static constexpr float ACCOUNT_LB_WIDTH = 260.0f;
+static constexpr uint32_t ACCOUNT_LB_SIZE = 11;
+static constexpr float ACCOUNT_LB_WIDTH = 220.0f;
 
 extern "C" {
     EM_JS(void, update_account_leaderboard, (), {
@@ -53,7 +53,7 @@ extern "C" {
                     }
                     const selfXpNeeded = ((me['xpNeeded']|0) || calcNeed(selfLevel));
                     const idx = list.findIndex(e => (String(e['name']||e['username']||e['user']||e['global_name']||"") === selfName));
-                    const row = { name: selfName, level: selfLevel|0, xp: (selfXp % Math.max(1,selfXpNeeded))|0, xpNeeded: selfXpNeeded|0 };
+                    const row = { name: selfName, level: selfLevel|0, xp: (selfXp % Math.max(1,selfXpNeeded))|0, xpNeeded: selfXpNeeded|0, self: true };
                     if (idx === -1) { list.push(row); }
                     else { list[idx] = row; }
                 } else {
@@ -64,10 +64,15 @@ extern "C" {
                         name: String(e['name'] || e['username'] || e['user'] || e['global_name'] || 'Unnamed'),
                         level: (e['level']|0),
                         xp: (e['xp']|0),
-                        xpNeeded: (e['xpNeeded']|0) || (e['xp_needed']|0) || calcNeed((e['level']|0) || 1)
+                        xpNeeded: (e['xpNeeded']|0) || (e['xp_needed']|0) || calcNeed((e['level']|0) || 1),
+                        self: !!e['self']
                     }));
                     mapped.sort((a,b)=> (b.level - a.level) || (b.xp - a.xp));
-                    Module.accountLeaderboard = mapped.slice(0, 10);
+                    let top = mapped.slice(0, 10);
+                    const selfIdx = mapped.findIndex(r => r && r.self);
+                    const inTop = selfIdx >= 0 && selfIdx < 10;
+                    if (!inTop && selfIdx >= 0) top.push(mapped[selfIdx]);
+                    Module.accountLeaderboard = top;
                 } catch(err) { log('map/sort error', err && (err.stack||err.message)); }
             };
             Module._acctLbFetch = fetchIt;
@@ -106,6 +111,10 @@ extern "C" {
     EM_JS(int, get_account_lb_xp_needed, (int i), {
         return (Module.accountLeaderboard && Module.accountLeaderboard[i] && (Module.accountLeaderboard[i].xpNeeded|0)) | 0;
     });
+
+    EM_JS(int, get_account_lb_is_self, (int i), {
+        return (Module.accountLeaderboard && Module.accountLeaderboard[i] && (Module.accountLeaderboard[i].self ? 1 : 0)) | 0;
+    });
 }
 
 namespace Ui {
@@ -113,7 +122,7 @@ namespace Ui {
     public:
         uint8_t pos;
         LerpFloat ratio;
-        AccountLeaderboardSlot(uint8_t p) : Element(ACCOUNT_LB_WIDTH, 22), pos(p) {
+        AccountLeaderboardSlot(uint8_t p) : Element(ACCOUNT_LB_WIDTH, 20), pos(p) {
             ratio.set(0);
             style.no_polling = 1;
             style.animate = [&](Element*, Renderer&){
@@ -155,8 +164,10 @@ namespace Ui {
             ctx.line_to((width-height)/2,0);
             ctx.stroke();
 
-            // progress bar (xp towards next level)
-            ctx.set_stroke(0xff55bb55);
+            // progress bar (xp towards next level): local account in yellow, others green
+            bool is_self = get_account_lb_is_self(pos) != 0;
+            uint32_t stroke_color = is_self ? 0xffe6d34a : 0xff55bb55;
+            ctx.set_stroke(stroke_color);
             ctx.set_line_width(height * 0.8f);
             ctx.begin_path();
             ctx.move_to(-(width-height)/2,0);
@@ -192,7 +203,7 @@ Element *Ui::make_title_account_leaderboard() {
         return std::format("Top Accounts ({} total)", n);
     });
 
-    Container *lb = new Ui::Container({ header }, ACCOUNT_LB_WIDTH + 30, 54, { .fill = 0xff55bb55, .line_width = 6, .round_radius = 7 });
+    Container *lb = new Ui::Container({ header }, ACCOUNT_LB_WIDTH + 20, 46, { .fill = 0xff55bb55, .line_width = 5, .round_radius = 6 });
 
     Element *list = new Ui::VContainer(
         Ui::make_range(0, ACCOUNT_LB_SIZE, [](uint32_t i){ return (Element*) new Ui::AccountLeaderboardSlot((uint8_t)i); })
@@ -200,14 +211,14 @@ Element *Ui::make_title_account_leaderboard() {
 
     Element *board = new Ui::VContainer({ lb, list }, 0, 0, {
         .fill = 0xff555555,
-        .line_width = 6,
-        .round_radius = 7,
+        .line_width = 5,
+        .round_radius = 6,
         .should_render = [](){ return Game::should_render_title_ui(); },
         .no_polling = 1
     });
     board->style.h_justify = Style::Right;
     board->style.v_justify = Style::Top;
     board->x = -20;
-    board->y = 90; // a bit lower to avoid overlapping the GitHub button
+    board->y = 20;
     return board;
 }
