@@ -3,6 +3,8 @@
 #include <Server/Server.hh>
 
 #include <Shared/Config.hh>
+#include <Shared/StaticData.hh>
+
 
 #include <iostream>
 #include <string>
@@ -437,24 +439,89 @@ WebSocketServer::WebSocketServer() {
 
 
                 // API: minimal account info
-                if (req.url.startsWith("/api/me")) {
+                                                if (req.url.startsWith("/api/me")) {
                     const cookies = parseCookies(req.headers.cookie||"");
                     const tok = cookies[SESS_COOKIE];
-                    const row = tok ? await new Promise((resolve)=>{ db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [tok], function(err,row){ resolve(err?null:row); }); }) : null;
-                    if (!row || row.revoked) { res.writeHead(401).end("Unauthorized"); return; }
+                    const srow = tok ? await new Promise((resolve)=>{ db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [tok], function(err,row){ resolve(err?null:row); }); }) : null;
+                    if (!srow || srow.revoked) { console.warn('[WASM][ME] unauthorized: invalid session'); res.writeHead(401).end("Unauthorized"); return; }
                     const now = Math.floor(Date.now()/1000);
-                    if (now > Number(row.expires_at)) { res.writeHead(401).end("Unauthorized"); return; }
-                    const link = await new Promise((resolve)=>{ db.get('SELECT discord_user_id FROM discord_links WHERE account_id=? LIMIT 1', [row.account_id], function(err,row){ resolve(err?null:row); }); });
-                    if (!link) { res.writeHead(401).end("Unauthorized"); return; }
-                    db.all("SELECT discord_id, username, account_xp, account_level FROM users WHERE discord_id=?", [link.discord_user_id], function(err, rows) {
-                        if (err) { res.writeHead(500).end("DB Error"); return; }
-                        const out = (rows && rows[0]) ? rows[0] : { discord_id: link.discord_user_id, username: '', account_xp: 0, account_level: 1 };
-                        res.writeHead(200, { "Content-Type": "application/json" });
-                        res.end(JSON.stringify(out));
-                    });
+                    if (now > Number(srow.expires_at)) { console.warn('[WASM][ME] unauthorized: expired'); res.writeHead(401).end("Unauthorized"); return; }
+                    const link = await new Promise((resolve)=>{ db.get('SELECT discord_user_id FROM discord_links WHERE account_id=? LIMIT 1', [srow.account_id], function(err,row){ resolve(err?null:row); }); });
+                    if (!link) { console.warn('[WASM][ME] unauthorized: no link for account', srow.account_id); res.writeHead(401).end("Unauthorized"); return; }
+                    const unameRow = await new Promise((resolve)=>{ db.get('SELECT username FROM users WHERE discord_id=? LIMIT 1', [link.discord_user_id], function(err,row){ resolve(err?null:row); }); });
+                    const accountRow = await new Promise((resolve)=>{ db.get('SELECT account_xp FROM accounts WHERE id=? LIMIT 1', [srow.account_id], function(err,row){ resolve(err?null:row); }); });
+                    function scoreToPassLevel(level){ return Math.floor(Math.pow(1.06, level - 1) * level) + 3; }
+                    const MAX_LEVEL = 99;
+                    const M = (function(){ try { return parseInt(process.env.ACCOUNT_XP_MULT||String($3),10)||$3; } catch(e){ return $3; } })();
+                    let totalXp = (accountRow && accountRow.account_xp) ? (accountRow.account_xp|0) : 0;
+                    let lvl = 1; let rem = totalXp|0;
+                    while (lvl < MAX_LEVEL) { const need = scoreToPassLevel(lvl) * M; if (rem < need) break; rem -= need; lvl++; }
+                    const out = {
+                        account_id: srow.account_id,
+                        discord_id: link.discord_user_id,
+                        username: (unameRow && unameRow.username) ? String(unameRow.username) : '',
+                        account_xp: totalXp|0,
+                        account_level: lvl|0
+                    };
+                    try { console.log('[WASM][ME] resp', out); } catch(e) {}
+                    res.writeHead(200, { "Content-Type": "application/json" });
+                    res.end(JSON.stringify(out));
                     return;
                 }
 
+
+                
+                // Leaderboard: top accounts by account_xp (exclude bots implicitly; bots have no accounts row)
+                if (req.url.startsWith("/api/leaderboard") || req.url.startsWith("/auth/leaderboard")) {
+                    try {
+                        const u = new URL(req.url, "http://localhost");
+                        const limitRaw = u.searchParams.get('limit');
+                        let limit = 50;
+                        if (limitRaw !== null) {
+                            const n = parseInt(String(limitRaw), 10);
+                            if (!Number.isNaN(n) && n > 0) limit = n;
+                        }
+                        limit = Math.min(limit, 200);
+                        // compute account level from xp using same curve as C++ (score_to_pass_level * 100)
+                                                                        function scoreToPassLevel(level) { return Math.floor(Math.pow(1.06, level - 1) * level) + 3; }
+                        const MAX_LEVEL = 99;
+                        const M = (function(){ try { return parseInt(process.env.ACCOUNT_XP_MULT||String($3),10)||$3; } catch(e){ return $3; } })();
+                        function accountXpToLevel(totalXp) {
+                            let level = 1;
+                            let remaining = Math.max(0, Number(totalXp|0));
+                            while (level < MAX_LEVEL) {
+                                const need = scoreToPassLevel(level) * M;
+                                if (remaining < need) break;
+                                remaining -= need;
+                                level++;
+                            }
+                            return { level, xp: remaining, xpNeeded: (level >= MAX_LEVEL) ? 0xffffffff : scoreToPassLevel(level) * M };
+                        }
+                        const sql = `
+                            SELECT a.account_xp AS xp, dl.discord_user_id AS did, u.username AS uname
+                            FROM accounts a
+                            LEFT JOIN discord_links dl ON dl.account_id = a.id
+                            LEFT JOIN users u ON u.discord_id = dl.discord_user_id
+                            ORDER BY a.account_xp DESC
+                            LIMIT ?
+                        `;
+                                                db.all(sql, [limit], function(err, rows){
+                            if (err) { try { console.error('[WASM][LB] db error', err); } catch(_) {} res.writeHead(500).end("DB error"); return; }
+                            try { console.log('[WASM][LB] rows', Array.isArray(rows) ? rows.length : 0, rows && rows.slice ? rows.slice(0,5) : rows); } catch(_) {}
+                            const out = (rows||[]).map(function(r){
+                                const lvl = accountXpToLevel(r.xp || 0);
+                                const name = (r && r.uname ? String(r.uname) : (r && r.did ? String(r.did) : 'Unnamed'));
+                                return { name, level: lvl.level, xp: lvl.xp, xpNeeded: lvl.xpNeeded };
+                            });
+                            try { console.log('[WASM][LB] response', out && out.slice ? out.slice(0,10) : out); } catch(_) {}
+                            res.writeHead(200, { "Content-Type": "application/json" });
+                            res.end(JSON.stringify(out));
+                        });
+                    } catch(e) {
+                        res.writeHead(500).end("Error");
+                    }
+                    return;
+                }
 
                 // Static file server
                 let encodeType = "text/html";
@@ -594,7 +661,7 @@ WebSocketServer::WebSocketServer() {
             });
         })
 
-    })(), SERVER_PORT, INCOMING_BUFFER, MAX_BUFFER_LEN);
+    })(), SERVER_PORT, INCOMING_BUFFER, MAX_BUFFER_LEN, ACCOUNT_XP_MULTIPLIER);
 }
 
 void Server::run() {

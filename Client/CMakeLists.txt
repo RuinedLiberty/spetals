@@ -103,6 +103,7 @@ set(SRCS
     Ui/TitleScreen/PetalGallery.cc
     Ui/TitleScreen/Settings.cc
     Ui/TitleScreen/StatScreen.cc
+    Ui/TitleScreen/Leaderboard.cc
     Ui/Button.cc
     Ui/Choose.cc
     Ui/Container.cc

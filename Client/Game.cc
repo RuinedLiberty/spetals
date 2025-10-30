@@ -107,6 +107,8 @@ void Game::init() {
             Storage::retrieve();
     reset();
 
+    // Make account XP multiplier available to JS (used by Title Screen leaderboard calc)
+    EM_ASM({ try { Module.ACCOUNT_XP_MULT = $0|0; } catch(e) {} }, ACCOUNT_XP_MULTIPLIER);
 
         // Prime login state immediately
     update_logged_in_as();
@@ -159,8 +161,12 @@ void Game::init() {
     title_ui_window.add_child(
         Ui::make_changelog()
     );
-    title_ui_window.add_child(
+        title_ui_window.add_child(
         Ui::make_github_link_button()
+    );
+    // Account leaderboard (title screen only)
+    title_ui_window.add_child(
+        Ui::make_title_account_leaderboard()
     );
     game_ui_window.add_child(
         Ui::make_death_main_screen()

@@ -10,6 +10,10 @@ extern uint32_t const TPS;
 
 extern uint32_t const BOT_COUNT;
 
+// Account XP multiplier used for Account Leveling (applies to server and client UI)
+extern uint32_t const ACCOUNT_XP_MULTIPLIER;
+
+
 extern float const PETAL_DISABLE_DELAY;
 extern float const PLAYER_ACCELERATION;
 extern float const MOB_ACCELERATION;
