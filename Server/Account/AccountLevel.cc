@@ -9,9 +9,9 @@
 namespace AccountLevel {
     static uint32_t account_level_score_to_pass(uint32_t level) {
         if (level >= MAX_LEVEL) return 0xffffffffu; // effectively infinite
-        // Slower than in-game: reuse in-game curve but scale up 2x
+        // Much slower than in-game: reuse in-game curve but scale up 100x
         uint32_t base = score_to_pass_level(level);
-        return base * 2u;
+        return base * 100u;
     }
     
     uint32_t get_xp_needed_for_next(uint32_t level) {

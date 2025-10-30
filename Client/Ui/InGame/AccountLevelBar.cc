@@ -8,7 +8,7 @@
 
 using namespace Ui;
 
-AccountLevelBar::AccountLevelBar() : Element(260, 28) {
+AccountLevelBar::AccountLevelBar() : Element(240, 26) {
     progress = 0;
     level = 1;
     // Animate progress smoothly to the current account XP ratio
@@ -35,8 +35,8 @@ void AccountLevelBar::on_render(Renderer &ctx) {
     ctx.move_to(-width / 2, 0);
     ctx.line_to(width / 2, 0);
     ctx.stroke();
-    // Foreground progress
-    ctx.set_stroke(0xfff9e496);
+    // Foreground progress (light blue)
+    ctx.set_stroke(0xff66ccff);
     ctx.set_line_width(height * 0.8f);
     ctx.begin_path();
     ctx.move_to(-width / 2, 0);
