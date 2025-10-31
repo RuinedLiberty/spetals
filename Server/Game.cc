@@ -177,6 +177,28 @@ static void _update_client(Simulation *sim, Client *client) {
     sim->arena_info.write(&writer, client->seen_arena);
     client->seen_arena = 1;
     client->send_packet(writer.packet, writer.at - writer.packet);
+
+    // After the main update, send real account levels for visible real players (not bots)
+    {
+        Writer w(Server::OUTGOING_PACKET);
+        w.write<uint8_t>(Clientbound::kEntityAccountLevels);
+        for (EntityID const &id : in_view) {
+            if (!sim->ent_exists(id)) continue;
+            Entity &e = sim->get_ent(id);
+            if (!e.has_component(kFlower)) continue;
+            // Resolve account for this entity; bots are mapped to "bot:*" and should be skipped
+            std::string acc = AccountLink::get_account_for_entity(e.id);
+            if (acc.empty()) continue;
+            if (acc.rfind("bot:", 0) == 0) continue; // starts with "bot:"
+            uint32_t lvl = 1, xp = 0;
+            AccountLevel::get_level_and_xp(acc, lvl, xp);
+            w.write<EntityID>(e.id);
+            w.write<uint32_t>(lvl);
+        }
+        // terminator
+        w.write<EntityID>(NULL_ENTITY);
+        client->send_packet(w.packet, w.at - w.packet);
+    }
 }
 
 GameInstance::GameInstance() : simulation(), clients(), team_manager(&simulation) {}

@@ -17,6 +17,7 @@ enum Clientbound {
     kPetalGallery, // initial or full petal gallery payload for the account
     kAccountLevel, // account level payload (level, xp towards next)
     kAccountLevelBar, // optional updated bar (level, xp, need)
+    kEntityAccountLevels, // mapping of EntityID -> account level for visible players
 
     kPingReply // echo reply for RTT measurement
 };

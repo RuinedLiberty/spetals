@@ -54,13 +54,16 @@ void render_health(Renderer &ctx, Entity const &ent) {
         }
         uint32_t lvl_color = RARITY_COLORS[highest_rarity];
 
-        uint32_t account_lvl = 1;
+                uint32_t account_lvl = 1;
         if (isLocalPlayer) {
             account_lvl = Game::account_level;
         } else {
-            account_lvl = 1 + (ent.id.id % 5);
+            // Use server-provided real account level when available; fallback to 1..5 for bots or unknowns
+            uint32_t cached = (ent.id.id < ENTITY_CAP) ? Game::entity_account_level[ent.id.id] : 0;
+            account_lvl = (cached > 0 ? cached : (1 + (ent.id.id % 5)));
         }
         std::string txt = std::string("Lvl ") + std::to_string(account_lvl);
+
 
         ctx.set_text_size(14);
         float tw = ctx.get_text_size(txt.c_str());
