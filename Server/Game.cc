@@ -199,17 +199,22 @@ static void _update_client(Simulation *sim, Client *client) {
         w.write<EntityID>(NULL_ENTITY);
         client->send_packet(w.packet, w.at - w.packet);
     }
-    {
+        {
+        // Determine the global top account by total XP (offline or online)
+        std::string top_acc;
+#ifndef WASM_SERVER
+        AuthDB::get_top_account_by_xp(top_acc);
+#else
+        WasmAccountStore::get_top_account(top_acc);
+#endif
         EntityID top_player_ent = NULL_ENTITY;
-        uint32_t top_level = 0;
-        sim->for_each<kFlower>([&](Simulation *sm, Entity &pl){
-            std::string acc = AccountLink::get_account_for_entity(pl.id);
-            if (acc.empty()) return;
-            if (acc.rfind("bot:", 0) == 0) return;
-            uint32_t lvl=1, xp=0;
-            AccountLevel::get_level_and_xp(acc, lvl, xp);
-            if (lvl > top_level) { top_level = lvl; top_player_ent = pl.id; }
-        });
+        if (!top_acc.empty()) {
+            // Find if this top account has a currently online player entity to anchor the crown.
+            sim->for_each<kFlower>([&](Simulation *sm, Entity &pl){
+                std::string acc = AccountLink::get_account_for_entity(pl.id);
+                if (acc == top_acc) { top_player_ent = pl.id; }
+            });
+        }
         Writer w(Server::OUTGOING_PACKET);
         w.write<uint8_t>(Clientbound::kTopAccountLeader);
         w.write<EntityID>(top_player_ent);

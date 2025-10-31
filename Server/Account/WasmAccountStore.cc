@@ -4,6 +4,9 @@
 #include <mutex>
 #include <vector>
 #include <utility>
+#ifdef WASM_SERVER
+#include <emscripten.h>
+#endif
 
 namespace {
     // key: (category, account_id)
@@ -75,6 +78,33 @@ bool add_xp(const std::string &account_id, uint32_t delta) {
     uint32_t &ref = g_account_xp[account_id];
     ref += delta;
     return true;
+}
+
+bool get_top_account(std::string &account_id_out) {
+    account_id_out.clear();
+#ifdef WASM_SERVER
+    // Prefer authoritative DB-backed top account exposed by the Node host (Module.topAccount)
+    int len = EM_ASM_INT({
+        var s = (Module.topAccount || "");
+        return lengthBytesUTF8(s) + 1;
+    });
+    if (len > 1 && len < 256) {
+        std::vector<char> buf((size_t)len);
+        EM_ASM({
+            var s = (Module.topAccount || "");
+            stringToUTF8(s, $0, $1);
+        }, buf.data(), len);
+        account_id_out.assign(buf.data());
+        if (!account_id_out.empty()) return true;
+    }
+#endif
+    // Fallback: compute from in-memory map (only covers accounts seen this process lifetime)
+    std::lock_guard<std::mutex> lk(g_mu);
+    uint32_t best = 0; bool have = false;
+    for (auto const &kv : g_account_xp) {
+        if (!have || kv.second > best) { best = kv.second; account_id_out = kv.first; have = true; }
+    }
+    return have;
 }
 
 } // namespace WasmAccountStore

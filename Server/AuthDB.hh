@@ -35,11 +35,14 @@ namespace AuthDB {
     bool record_petal_obtained(const std::string &account_id, int petal_id);
 
     // Fetch list of obtained petal ids for this account.
-        bool get_petal_ids(const std::string &account_id, std::vector<int> &petal_ids_out);
+    bool get_petal_ids(const std::string &account_id, std::vector<int> &petal_ids_out);
 
     // Account XP/Level persistence
     bool add_account_xp(const std::string &account_id, int xp);
     bool get_account_xp(const std::string &account_id, int &xp_out);
+
+    // Returns the account id with highest total account_xp. True if found.
+    bool get_top_account_by_xp(std::string &account_id_out);
 }
 
 

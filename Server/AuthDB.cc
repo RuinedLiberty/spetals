@@ -431,7 +431,29 @@ bool get_account_xp(const std::string &account_id, int &xp_out) {
     return true;
 }
 
+
+bool get_top_account_by_xp(std::string &account_id_out) {
+    account_id_out.clear();
+    if (!g_db) { if (!init("") ) return false; }
+    const char *sql = "SELECT id FROM accounts ORDER BY account_xp DESC LIMIT 1";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "AuthDB: get_top_account_by_xp prepare failed: " << sqlite3_errmsg(g_db) << "\n";
+        return false;
+    }
+    int rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        const char *acc = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+        if (acc) account_id_out.assign(acc);
+        sqlite3_finalize(stmt);
+        return !account_id_out.empty();
+    }
+    sqlite3_finalize(stmt);
+    return false;
+}
+
 } // namespace AuthDB
+
 
 
 
