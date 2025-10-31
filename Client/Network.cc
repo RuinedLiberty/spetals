@@ -50,7 +50,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             }
             break;
         }
-                case Clientbound::kPetalGallery: {
+        case Clientbound::kPetalGallery: {
             uint32_t bytes = reader.read<uint32_t>();
             for (uint32_t i=0;i<bytes;++i) {
                 uint8_t b = reader.read<uint8_t>();
@@ -60,11 +60,10 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     Game::seen_petals[idx] = ((b >> bit) & 1) ? 1 : 0;
                 }
             }
-            // Ensure basic is always marked seen
             Game::seen_petals[PetalID::kBasic] = 1;
             break;
         }
-                case Clientbound::kAccountLevel: {
+        case Clientbound::kAccountLevel: {
             uint32_t lvl = reader.read<uint32_t>();
             uint32_t xp = reader.read<uint32_t>();
             Game::account_level = lvl;
@@ -80,8 +79,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             Game::account_xp_needed = need;
             break;
         }
-                case Clientbound::kEntityAccountLevels: {
-            // list of pairs: EntityID then uint32 level until NULL_ENTITY marker
+        case Clientbound::kEntityAccountLevels: {
             while (1) {
                 EntityID id = reader.read<EntityID>();
                 if (id == NULL_ENTITY) break;
@@ -90,8 +88,11 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             }
             break;
         }
-
-
+        case Clientbound::kTopAccountLeader: {
+            EntityID id = reader.read<EntityID>();
+            Game::top_account_leader = id;
+            break;
+        }
         case Clientbound::kPingReply: {
             uint64_t sent = reader.read<uint64_t>();
             double now = Debug::get_timestamp();
@@ -103,6 +104,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             break;
     }
 }
+
 
 
 

@@ -8,6 +8,8 @@
 
 #include <Helpers/Vector.hh>
 
+namespace Petals { void Crown(Renderer &ctx, float r); }
+
 #include <Shared/Map.hh>
 #include <Shared/StaticData.hh>
 
@@ -173,11 +175,20 @@ void Game::render_game() {
         _apply_damage_filter(renderer, ent);
         render_flower(renderer, ent);
     });
-        simulation.for_each<kName>([](Simulation *sim, Entity const &ent){
+    simulation.for_each<kName>([](Simulation *sim, Entity const &ent){
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
         render_name(renderer, ent);
     });
+
+    // Draw the top-account crown last so it appears above players (highest z-order)
+        if (!(Game::top_account_leader == NULL_ENTITY) && simulation.ent_exists(Game::top_account_leader)) {
+        Entity const &ent = simulation.get_ent(Game::top_account_leader);
+        RenderContext c(&renderer);
+        renderer.translate(ent.get_x(), ent.get_y());
+        renderer.translate(0, 20);
+        Petals::Crown(renderer, 65.0f);
+    }
 
         // Debug: draw server-true mob hitboxes and cameras' vision rectangles
         if (Game::show_debug && ENABLE_MOB_HITBOX_DEBUG) {

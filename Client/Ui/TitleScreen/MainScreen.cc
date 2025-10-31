@@ -102,7 +102,7 @@ Element *Ui::make_title_input_box() {
         ),
 
         new Ui::Element(0,20),
-        new Ui::StaticText(16, "open-source florr.io pvp clone"),
+        new Ui::StaticText(16, "Let's bring Legacy Florr.io back!"),
     }, 0, 0, { .animate = [](Element *elt, Renderer &ctx){}, .should_render = [](){ return Game::should_render_title_ui(); } });
     return title;
 }

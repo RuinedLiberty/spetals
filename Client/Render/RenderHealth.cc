@@ -69,7 +69,7 @@ void render_health(Renderer &ctx, Entity const &ent) {
         float tw = ctx.get_text_size(txt.c_str());
         float margin = 0.0f;
         ctx.translate(margin + tw * 0.5f, 0);
-        ctx.draw_text(txt.c_str(), { .size = 16, .fill = lvl_color });
+        ctx.draw_text(txt.c_str(), { .fill = lvl_color, .stroke = 0xff000000, .size = 16, .stroke_scale = 0.12f });
     }
 
 }

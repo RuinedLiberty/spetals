@@ -10,6 +10,7 @@ set(SRCS
     Assets/Mob.cc
     Assets/Petal.cc
     Assets/Web.cc
+    Assets/Crown.cc
     # Per-petal drawings
     Assets/Petals/AntEgg.cc
     Assets/Petals/Antennae.cc

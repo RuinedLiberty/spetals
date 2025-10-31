@@ -8,6 +8,10 @@
 #include <Shared/Entity.hh>
 
 #include <iostream>
+#include <cstring>
+#include <emscripten.h>
+
+namespace Petals { void Crown(Renderer &ctx, float r); }
 
 void render_flower(Renderer &ctx, Entity const &ent) {
     if (ent.has_component(kMob)) return;

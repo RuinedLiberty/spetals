@@ -536,6 +536,15 @@ WebSocketServer::WebSocketServer() {
                         encodeType = "application/wasm";
                         file = "gardn-client.wasm";
                         break;
+                    case "/favicon-32x32.png":
+                        encodeType = "image/png";
+                        file = "favicon-32x32.png";
+                        break;
+                    case "/favicon.ico":
+                        // Serve the PNG as a fallback for favicon.ico requests
+                        encodeType = "image/png";
+                        file = "favicon-32x32.png";
+                        break;
                     default:
                         file = "";
                         break;
