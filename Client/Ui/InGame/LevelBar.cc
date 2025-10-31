@@ -48,20 +48,11 @@ void LevelBar::on_render(Renderer &ctx) {
 }
 
 Element *Ui::make_level_bar() {
-    Element *level_bar = new Ui::VContainer({
+        Element *level_bar = new Ui::VContainer({
         new Ui::LevelBar(),
         // Account level (blue) bar just under the flower level bar
         new Ui::AccountLevelBar(),
-        new Ui::DynamicText(14, [](){
-            std::string format_string;
-            if (Game::alive()) {
-                Entity &player = Game::simulation.get_ent(Game::player_id);
-                uint32_t level = score_to_level(Game::score);
-                if (loadout_slots_at_level(level) < MAX_SLOT_COUNT)
-                    format_string = std::format("Extra petal slot at level {}", div_round_up(level + 1, LEVELS_PER_EXTRA_SLOT) * LEVELS_PER_EXTRA_SLOT);
-            }
-            return format_string;
-        }),
+        // Removed extra-slot hint text
         new Ui::Element(0,65)
     }, 0, 5, { .should_render = []() { return Game::alive(); } });
     level_bar->style.h_justify = Style::Left;
