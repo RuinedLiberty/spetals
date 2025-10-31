@@ -11,8 +11,60 @@
 
 #include <algorithm>
 #include <cstring>
+#include <array>
 
 using namespace Ui;
+
+
+static void compute_spawnables(std::array<uint8_t, MobID::kNumMobs> &mob_ok, std::array<uint8_t, PetalID::kNumPetals> &petal_ok) {
+    mob_ok.fill(0);
+    petal_ok.fill(0);
+    // Baseline petals obtainable regardless of mob spawns
+    petal_ok[PetalID::kBasic] = 1;
+    petal_ok[PetalID::kUniqueBasic] = 1;
+    petal_ok[PetalID::kPollen] = 1; // players can drop pollen on death
+
+    // Direct zone spawns
+    for (auto const &zone : MAP_DATA) {
+        for (auto const &sc : zone.spawns) {
+            if (sc.chance > 0) {
+                if (sc.id < MobID::kNumMobs)
+                    mob_ok[sc.id] = 1;
+            }
+        }
+    }
+
+    // Closure: propagate via AntHole waves, petal spawns, and mob drops
+    bool changed;
+    do {
+        changed = false;
+        // If AntHole spawns, include all wave mobs (e.g., Queen Ant)
+        if (mob_ok[MobID::kAntHole]) {
+            for (auto const &wave : ANTHOLE_SPAWNS) {
+                for (MobID::T m : wave) {
+                    if (m < MobID::kNumMobs && !mob_ok[m]) { mob_ok[m] = 1; changed = true; }
+                }
+            }
+        }
+        // Petals that spawn mobs make those mobs obtainable
+        for (PetalID::T p = 0; p < PetalID::kNumPetals; ++p) {
+            if (!petal_ok[p]) continue;
+            auto const &attrs = PETAL_DATA[p].attributes;
+            if (attrs.spawns != MobID::kNumMobs) {
+                if (!mob_ok[attrs.spawns]) { mob_ok[attrs.spawns] = 1; changed = true; }
+            }
+        }
+        // Mobs that are obtainable drop petals that become obtainable
+        for (MobID::T m = 0; m < MobID::kNumMobs; ++m) {
+            if (!mob_ok[m]) continue;
+            auto const &md = MOB_DATA[m];
+            for (auto const &pid : md.drops) {
+                if (pid < PetalID::kNumPetals && !petal_ok[pid]) { petal_ok[pid] = 1; changed = true; }
+            }
+        }
+    } while (changed);
+}
+
 
 GalleryMob::GalleryMob(MobID::T id, float w) : 
     Element(w,w,{ .fill=0xff5a9fdb, .stroke_hsv=1, .line_width=3, .round_radius=6, .v_justify=Style::Top }), id(id) {}
@@ -125,20 +177,26 @@ static Element *make_mob_card(MobID::T id) {
 
 static Element *make_scroll() {
     Element *elt = new Ui::VContainer({}, 0, 10, {});
-    MobID::T id_list[MobID::kNumMobs];
+    std::array<uint8_t, MobID::kNumMobs> mob_ok;
+    std::array<uint8_t, PetalID::kNumPetals> petal_ok;
+    compute_spawnables(mob_ok, petal_ok);
+
+    std::vector<MobID::T> spawnable_ids;
     for (MobID::T i = 0; i < MobID::kNumMobs; ++i)
-        id_list[i] = i;
-    std::sort(id_list, id_list + MobID::kNumMobs, [](MobID::T a, MobID::T b) {
+        if (mob_ok[i]) spawnable_ids.push_back(i);
+
+    std::sort(spawnable_ids.begin(), spawnable_ids.end(), [](MobID::T a, MobID::T b) {
         if (MOB_DATA[a].rarity < MOB_DATA[b].rarity) return true;
         if (MOB_DATA[b].rarity < MOB_DATA[a].rarity) return false;
         return strcmp(MOB_DATA[a].name, MOB_DATA[b].name) <= 0;
     });
 
-    for (MobID::T i = 0; i < MobID::kNumMobs; ++i) 
-        elt->add_child(make_mob_card(id_list[i]));
+    for (MobID::T id : spawnable_ids)
+        elt->add_child(make_mob_card(id));
 
     return new Ui::ScrollContainer(elt, 300);
 }
+
 
 Element *Ui::make_mob_gallery() {
     Element *elt = new Ui::VContainer({

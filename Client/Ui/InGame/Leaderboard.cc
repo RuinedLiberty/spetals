@@ -23,17 +23,14 @@ LeaderboardSlot::LeaderboardSlot(uint8_t p) : Element(LEADERBOARD_WIDTH, 18) , p
         uint32_t const player_count = ai.player_count;
         uint32_t const topN = std::min(player_count, LEADERBOARD_SIZE);
 
-                // Determine if we should force-show the local player in the 10th slot
+                        // Determine if we should force-show the local player in the 10th slot
         uint8_t use_self_at_10 = 0;
         if (Game::alive() && topN == LEADERBOARD_SIZE) {
-            Entity const &me = Game::simulation.get_ent(Game::player_id);
-                        std::string const &pname = me.get_name();
             float const my_score = (float) Game::score;
-
+            // Check presence by entity id (not name)
             uint8_t found = 0;
             for (uint32_t i = 0; i < topN; ++i) {
-                if (ai.names[i] == pname) { found = 1; break; }
-                
+                if (ai.ids[i] == Game::player_id) { found = 1; break; }
             }
             if (!found && my_score <= (float) ai.scores[topN - 1]) use_self_at_10 = 1;
         }
@@ -64,23 +61,16 @@ void LeaderboardSlot::on_render(Renderer &ctx) {
 
         // Determine if we should force-show the local player in the 10th slot
         uint8_t use_self_at_10 = 0;
-    std::string player_name;
-    float player_score = 0;
-
+        float player_score = 0;
     if (Game::alive()) {
-        Entity const &me = Game::simulation.get_ent(Game::player_id);
-                player_name = me.get_name();
         player_score = (float) Game::score;
-
-                if (topN == LEADERBOARD_SIZE) {
+        if (topN == LEADERBOARD_SIZE) {
             uint8_t found = 0;
             for (uint32_t i = 0; i < topN; ++i) {
-                                if (ai.names[i] == player_name) { found = 1; break; }
-
+                if (ai.ids[i] == Game::player_id) { found = 1; break; }
             }
             if (!found && player_score <= (float) ai.scores[topN - 1]) use_self_at_10 = 1;
         }
-
     }
 
 
@@ -98,22 +88,23 @@ void LeaderboardSlot::on_render(Renderer &ctx) {
     ctx.stroke();
 
     // Determine if this row is the local player and pick display data
-    bool is_self_row = false;
+        bool is_self_row = false;
     std::string name_str;
     float score_val = 0.0f;
 
     if (use_self_at_10 && pos == LEADERBOARD_SIZE - 1 && Game::alive()) {
         // Force show the local player in 10th slot
         is_self_row = true;
-        name_str = player_name.size() == 0 ? "Unnamed" : player_name;
+        // Use the player entity's current name to avoid ambiguity
+        std::string pname = Game::simulation.get_ent(Game::player_id).get_name();
+        name_str = pname.size() == 0 ? "Unnamed" : pname;
         score_val = player_score;
-        } else {
+    } else {
         // Regular top list entry
         name_str = ai.names[pos].size() == 0 ? "Unnamed" : ai.names[pos];
         score_val = (float) ai.scores[pos];
         if (Game::alive()) {
-                        if (ai.names[pos] == player_name) is_self_row = true;
-
+            if (ai.ids[pos] == Game::player_id) is_self_row = true;
         }
     }
 

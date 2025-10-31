@@ -19,6 +19,7 @@
 
 #ifdef WASM_SERVER
 extern "C" void record_mob_kill_js(const char *account_id_c, int mob_id);
+extern "C" void add_account_xp_js(const char *account_id_c, int delta);
 #endif
 
 static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops, float x, float y) {
@@ -73,9 +74,18 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     if (!acc.empty()) {
 #ifndef WASM_SERVER
                         AuthDB::record_mob_kill(acc, (int)ent.get_mob_id());
+                        // Grant account XP equal to in-game XP earned from this mob
+                        AuthDB::add_account_xp(acc, (int)ent.score_reward);
+                        // Push updated account level/xp to this account so client bar updates live
+                        Server::game.send_account_level_to_account(acc);
 #else
+                        // Update in-memory gallery and XP, and persist via JS bridge
                         WasmAccountStore::set_bit(WasmAccountStore::Category::MobGallery, acc, (int)ent.get_mob_id());
+                        WasmAccountStore::add_xp(acc, (uint32_t)ent.score_reward);
                         record_mob_kill_js(acc.c_str(), (int)ent.get_mob_id());
+                        add_account_xp_js(acc.c_str(), (int)ent.score_reward);
+                        // Push updated account level/xp to this account so client bar updates live
+                        Server::game.send_account_level_to_account(acc);
 #endif
                         Server::game.send_mob_gallery_to_account(acc);
                     }

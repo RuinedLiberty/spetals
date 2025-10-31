@@ -101,6 +101,9 @@ bool init(const std::string &db_path) {
         if (errmsg) sqlite3_free(errmsg);
         return false;
     }
+    // Ensure account_xp column on accounts (migration-safe: ignore error if exists)
+    sqlite3_exec(g_db, "ALTER TABLE accounts ADD COLUMN account_xp INTEGER NOT NULL DEFAULT 0;", nullptr, nullptr, nullptr);
+
     // meta table for db_instance_id and schema_version
     sqlite3_exec(g_db, "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);", nullptr, nullptr, nullptr);
     // db_instance_id
@@ -386,6 +389,50 @@ bool get_petal_ids(const std::string &account_id, std::vector<int> &petal_ids_ou
     return true;
 }
 
+// ---------------- Account XP -----------------
+bool add_account_xp(const std::string &account_id, int xp) {
+    if (!g_db) { if (!init("") ) return false; }
+    if (!is_valid_uuid(account_id)) return false;
+    std::time_t now = std::time(nullptr);
+    sqlite3_stmt *stmt = nullptr;
+    const char *sql = "UPDATE accounts SET account_xp = COALESCE(account_xp,0) + ?1, updated_at=?2 WHERE id=?3";
+    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "AuthDB: add_account_xp prepare failed: " << sqlite3_errmsg(g_db) << "\n";
+        return false;
+    }
+    sqlite3_bind_int(stmt, 1, xp);
+    sqlite3_bind_int64(stmt, 2, now);
+    sqlite3_bind_text(stmt, 3, account_id.c_str(), -1, SQLITE_STATIC);
+    bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool get_account_xp(const std::string &account_id, int &xp_out) {
+    xp_out = 0;
+    if (!g_db) { if (!init("") ) return false; }
+    if (!is_valid_uuid(account_id)) return false;
+    sqlite3_stmt *stmt = nullptr;
+    const char *sql = "SELECT account_xp FROM accounts WHERE id=?1 LIMIT 1";
+    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "AuthDB: get_account_xp prepare failed: " << sqlite3_errmsg(g_db) << "\n";
+        return false;
+    }
+    sqlite3_bind_text(stmt, 1, account_id.c_str(), -1, SQLITE_STATIC);
+    int rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        xp_out = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+        return true;
+    }
+    sqlite3_finalize(stmt);
+    // If account row missing (shouldn't happen), treat as 0
+    xp_out = 0;
+    return true;
+}
+
 } // namespace AuthDB
+
+
 
 

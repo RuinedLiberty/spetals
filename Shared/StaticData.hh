@@ -8,8 +8,11 @@
 extern uint32_t const MAX_LEVEL;
 extern uint32_t const TPS;
 
-// How many CPU-controlled player bots to spawn server-side
 extern uint32_t const BOT_COUNT;
+
+// Account XP multiplier used for Account Leveling (applies to server and client UI)
+extern uint32_t const ACCOUNT_XP_MULTIPLIER;
+
 
 extern float const PETAL_DISABLE_DELAY;
 extern float const PLAYER_ACCELERATION;
@@ -38,6 +41,7 @@ extern float const DROP_RATE_MIN_RARE;
 extern float const DROP_RATE_MIN_EPIC;
 extern float const DROP_RATE_MIN_LEGENDARY;
 extern float const DROP_RATE_MIN_UNIQUE;
+extern float const UNIQUE_BASIC_REPLACE_CHANCE;
 
 float apply_drop_rate_modifiers(float base_pct, uint8_t rarity);
 
@@ -51,7 +55,7 @@ inline std::array const MAP_DATA = std::to_array<struct ZoneDefinition>({
         .top = 0,
         .right = 10000,
         .bottom = 4000,
-        .density = 1.2,
+        .density = 1.5,
         .drop_multiplier = 0.3,
         .spawns = {
             { MobID::kRock, 500000 },
@@ -72,7 +76,7 @@ inline std::array const MAP_DATA = std::to_array<struct ZoneDefinition>({
         .top = 0,
         .right = 20000,
         .bottom = 4000,
-        .density = 1.2,
+        .density = 1.5,
         .drop_multiplier = 0.15,
         .spawns = {
             { MobID::kCactus, 400000 },

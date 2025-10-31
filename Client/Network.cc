@@ -16,12 +16,15 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             simulation_ready = 1;
             camera_id = reader.read<EntityID>();
             EntityID curr_id = reader.read<EntityID>();
-            while(!(curr_id == NULL_ENTITY)) {
+                        while(!(curr_id == NULL_ENTITY)) {
                 assert(simulation.ent_exists(curr_id));
+                // Clear any cached account level for this entity leaving view
+                if (curr_id.id < ENTITY_CAP) Game::entity_account_level[curr_id.id] = 0;
                 Entity &ent = simulation.get_ent(curr_id);
                 simulation._delete_ent(curr_id);
                 curr_id = reader.read<EntityID>();
             }
+
             curr_id = reader.read<EntityID>();
             while(!(curr_id == NULL_ENTITY)) {
                 uint8_t create = reader.read<uint8_t>();
@@ -57,11 +60,39 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     Game::seen_petals[idx] = ((b >> bit) & 1) ? 1 : 0;
                 }
             }
-            // Ensure basic is always marked seen
             Game::seen_petals[PetalID::kBasic] = 1;
             break;
         }
-
+        case Clientbound::kAccountLevel: {
+            uint32_t lvl = reader.read<uint32_t>();
+            uint32_t xp = reader.read<uint32_t>();
+            Game::account_level = lvl;
+            Game::account_xp = xp;
+            break;
+        }
+        case Clientbound::kAccountLevelBar: {
+            uint32_t lvl = reader.read<uint32_t>();
+            uint32_t xp = reader.read<uint32_t>();
+            uint32_t need = reader.read<uint32_t>();
+            Game::account_level = lvl;
+            Game::account_xp = xp;
+            Game::account_xp_needed = need;
+            break;
+        }
+        case Clientbound::kEntityAccountLevels: {
+            while (1) {
+                EntityID id = reader.read<EntityID>();
+                if (id == NULL_ENTITY) break;
+                uint32_t lvl = reader.read<uint32_t>();
+                if (id.id < ENTITY_CAP) Game::entity_account_level[id.id] = lvl;
+            }
+            break;
+        }
+        case Clientbound::kTopAccountLeader: {
+            EntityID id = reader.read<EntityID>();
+            Game::top_account_leader = id;
+            break;
+        }
         case Clientbound::kPingReply: {
             uint64_t sent = reader.read<uint64_t>();
             double now = Debug::get_timestamp();
@@ -73,6 +104,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             break;
     }
 }
+
 
 
 

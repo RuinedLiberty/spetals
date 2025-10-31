@@ -10,6 +10,7 @@ set(SRCS
     Assets/Mob.cc
     Assets/Petal.cc
     Assets/Web.cc
+    Assets/Crown.cc
     # Per-petal drawings
     Assets/Petals/AntEgg.cc
     Assets/Petals/Antennae.cc
@@ -88,6 +89,9 @@ set(SRCS
     Ui/InGame/Leaderboard.cc
     Ui/InGame/LevelBar.cc
     Ui/InGame/LoadoutPetal.cc
+    Ui/InGame/LevelBar.cc
+    Ui/InGame/AccountLevelBar.cc
+    Ui/InGame/LoadoutPetal.cc
     Ui/InGame/LoadoutSlot.cc
     Ui/InGame/Map.cc
     Ui/InGame/Mobile.cc
@@ -100,6 +104,7 @@ set(SRCS
     Ui/TitleScreen/PetalGallery.cc
     Ui/TitleScreen/Settings.cc
     Ui/TitleScreen/StatScreen.cc
+    Ui/TitleScreen/Leaderboard.cc
     Ui/Button.cc
     Ui/Choose.cc
     Ui/Container.cc

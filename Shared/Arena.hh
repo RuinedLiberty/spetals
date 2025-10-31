@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Shared/StaticData.hh>
+#include <Shared/EntityDef.hh>
+
 
 #include <string>
 #include <cstdint>
@@ -15,7 +17,8 @@ CLIENT_ONLY(typedef LerpFloat Float;)
     SINGLE(player_count, uint32_t) \
     MULTIPLE(scores, Float, LEADERBOARD_SIZE) \
     MULTIPLE(names, std::string, LEADERBOARD_SIZE) \
-    MULTIPLE(colors, uint8_t, LEADERBOARD_SIZE)
+    MULTIPLE(colors, uint8_t, LEADERBOARD_SIZE) \
+    MULTIPLE(ids, EntityID, LEADERBOARD_SIZE)
 
 class Arena {
     enum Fields {

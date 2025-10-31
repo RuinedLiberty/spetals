@@ -65,7 +65,10 @@ namespace Ui {
     Element *make_settings_panel();
     Element *make_petal_gallery();
     Element *make_mob_gallery();
-    Element *make_changelog();
+        Element *make_changelog();
     Element *make_debug_stats();
     Element *make_github_link_button();
+
+    // Title-screen Account Leaderboard (top leveled accounts, offline-inclusive)
+    Element *make_title_account_leaderboard();
 }

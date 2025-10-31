@@ -23,6 +23,8 @@ namespace Game {
     extern std::string disconnect_message;
     extern std::array<uint8_t, PetalID::kNumPetals> seen_petals;
     extern std::array<uint8_t, MobID::kNumMobs> seen_mobs;
+    extern std::array<uint32_t, ENTITY_CAP> entity_account_level;
+    extern EntityID top_account_leader;
     
     extern double timestamp;
     
@@ -31,7 +33,14 @@ namespace Game {
     extern float slot_indicator_opacity;
     extern float transition_circle;
 
+    extern uint32_t account_level;
+    extern uint32_t account_xp;
+    extern uint32_t account_xp_needed;
+
+
+
     extern uint32_t respawn_level;
+
 
     extern std::array<PetalID::T, 2 * MAX_SLOT_COUNT> cached_loadout;
 

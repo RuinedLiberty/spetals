@@ -6,11 +6,13 @@
 #include <Server/Spawn.hh>
 #include <Server/Account/AccountLink.hh>
 #include <Server/Bots/ForwardShims.hh>
+#include <Server/Account/AccountLevel.hh>
 #ifndef WASM_SERVER
 #include <Server/AuthDB.hh>
 #else
 #include <Server/Account/WasmAccountStore.hh>
 #endif
+
 
 
 
@@ -58,7 +60,28 @@ static void _send_mob_gallery_for(Client *client) {
     client->send_packet(w.packet, w.at - w.packet);
 }
 
+static void _send_account_level_for(Client *client) {
+    if (!client || client->account_id.empty()) return;
+    uint32_t lvl = 1, xp = 0;
+    AccountLevel::get_level_and_xp(client->account_id, lvl, xp);
+    Writer w(Server::OUTGOING_PACKET);
+    w.write<uint8_t>(Clientbound::kAccountLevel);
+    w.write<uint32_t>(lvl);
+    w.write<uint32_t>(xp);
+    client->send_packet(w.packet, w.at - w.packet);
+
+    // Also send explicit xp requirement for next level
+    uint32_t need = AccountLevel::get_xp_needed_for_next(lvl);
+    Writer w2(Server::OUTGOING_PACKET);
+    w2.write<uint8_t>(Clientbound::kAccountLevelBar);
+    w2.write<uint32_t>(lvl);
+    w2.write<uint32_t>(xp);
+    w2.write<uint32_t>(need);
+    client->send_packet(w2.packet, w2.at - w2.packet);
+}
+
 static void _send_petal_gallery_for(Client *client) {
+
     if (!client || client->account_id.empty()) return;
     Writer w(Server::OUTGOING_PACKET);
     w.write<uint8_t>(Clientbound::kPetalGallery);
@@ -154,6 +177,44 @@ static void _update_client(Simulation *sim, Client *client) {
     sim->arena_info.write(&writer, client->seen_arena);
     client->seen_arena = 1;
     client->send_packet(writer.packet, writer.at - writer.packet);
+
+    // After the main update, send real account levels for visible real players (not bots)
+    {
+        Writer w(Server::OUTGOING_PACKET);
+        w.write<uint8_t>(Clientbound::kEntityAccountLevels);
+        for (EntityID const &id : in_view) {
+            if (!sim->ent_exists(id)) continue;
+            Entity &e = sim->get_ent(id);
+            if (!e.has_component(kFlower)) continue;
+            // Resolve account for this entity; bots are mapped to "bot:*" and should be skipped
+            std::string acc = AccountLink::get_account_for_entity(e.id);
+            if (acc.empty()) continue;
+            if (acc.rfind("bot:", 0) == 0) continue; // starts with "bot:"
+            uint32_t lvl = 1, xp = 0;
+            AccountLevel::get_level_and_xp(acc, lvl, xp);
+            w.write<EntityID>(e.id);
+            w.write<uint32_t>(lvl);
+        }
+        // terminator
+        w.write<EntityID>(NULL_ENTITY);
+        client->send_packet(w.packet, w.at - w.packet);
+    }
+    {
+        EntityID top_player_ent = NULL_ENTITY;
+        uint32_t top_level = 0;
+        sim->for_each<kFlower>([&](Simulation *sm, Entity &pl){
+            std::string acc = AccountLink::get_account_for_entity(pl.id);
+            if (acc.empty()) return;
+            if (acc.rfind("bot:", 0) == 0) return;
+            uint32_t lvl=1, xp=0;
+            AccountLevel::get_level_and_xp(acc, lvl, xp);
+            if (lvl > top_level) { top_level = lvl; top_player_ent = pl.id; }
+        });
+        Writer w(Server::OUTGOING_PACKET);
+        w.write<uint8_t>(Clientbound::kTopAccountLeader);
+        w.write<EntityID>(top_player_ent);
+        client->send_packet(w.packet, w.at - w.packet);
+    }
 }
 
 GameInstance::GameInstance() : simulation(), clients(), team_manager(&simulation) {}
@@ -208,11 +269,13 @@ void GameInstance::add_client(Client *client) {
         client->camera = ent.id;
     client->seen_arena = 0;
 
-    if (!client->account_id.empty()) {
+        if (!client->account_id.empty()) {
         AccountLink::map_camera(client->camera, client->account_id);
         _send_mob_gallery_for(client);
         _send_petal_gallery_for(client);
+        _send_account_level_for(client);
     }
+
 }
 
 void GameInstance::remove_client(Client *client) {
@@ -247,4 +310,13 @@ void GameInstance::send_petal_gallery_to_account(const std::string &account_id) 
         }
     }
 }
+
+void GameInstance::send_account_level_to_account(const std::string &account_id) {
+    for (Client *c : clients) {
+        if (c && c->account_id == account_id) {
+            _send_account_level_for(c);
+        }
+    }
+}
+
 

@@ -96,6 +96,22 @@ db.serialize(() => {
     FOREIGN KEY(account_id) REFERENCES accounts(id)
   )`);
   db.run('CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id)');
+  // Optional users table for vanity names (Discord username cache)
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    discord_id TEXT PRIMARY KEY,
+    username TEXT,
+    created_at INTEGER
+  )`);
+  // Migration: ensure accounts.account_xp exists (used for account leaderboard)
+  try {
+    db.all('PRAGMA table_info(accounts)', [], (err, rows) => {
+      if (err) return;
+      const has = Array.isArray(rows) && rows.some(r => r && r.name === 'account_xp');
+      if (!has) {
+        try { db.run('ALTER TABLE accounts ADD COLUMN account_xp INTEGER NOT NULL DEFAULT 0'); } catch(e) {}
+      }
+    });
+  } catch(e) {}
 });
 
 async function exchangeCodeForToken(code, redirect_uri) {
@@ -130,6 +146,24 @@ async function fetchUser(access_token) {
 }
 
 const app = express();
+
+// Compute account-level XP curve (mirrors C++), multiplier configurable via env ACCOUNT_XP_MULT (default 100)
+const MAX_LEVEL = 99;
+function scoreToPassLevel(level) {
+  return Math.floor(Math.pow(1.06, level - 1) * level) + 3;
+}
+function accountXpToLevel(totalXp) {
+  const M = parseInt(process.env.ACCOUNT_XP_MULT || '100', 10) || 100;
+  let level = 1;
+  let remaining = Math.max(0, Number(totalXp|0));
+  while (level < MAX_LEVEL) {
+    const need = scoreToPassLevel(level) * M;
+    if (remaining < need) break;
+    remaining -= need;
+    level++;
+  }
+  return { level, xp: remaining, xpNeeded: (level >= MAX_LEVEL) ? 0xffffffff : scoreToPassLevel(level) * M };
+}
 
 app.get('/auth/discord/login', (req, res) => {
   const redirect_uri = `${CFG.SITE_BASE_URL}/auth/discord/callback`;
@@ -192,17 +226,122 @@ app.get('/auth/discord/callback', async (req, res) => {
 // Health check
 app.get('/auth/health', (req, res) => res.status(200).send('OK'));
 
-// Minimal debug/me endpoint (optional)
-app.get('/auth/me', (req, res) => {
-  const cookies = parseCookies(req.headers.cookie || '');
-  const sid = cookies[CFG.COOKIE_NAME];
-  if (!sid) return res.status(401).send('Unauthorized');
-  db.get('SELECT sessions.account_id, accounts.banned FROM sessions JOIN accounts ON sessions.account_id = accounts.id WHERE sessions.id=? AND sessions.revoked=0 AND sessions.expires_at > ? LIMIT 1', [sid, nowSec()], (err, row) => {
-    if (err) return res.status(500).send('DB error');
-    if (!row) return res.status(401).send('Unauthorized');
-    if (row.banned) return res.status(403).send('Banned');
-    res.json({ account_id: row.account_id });
-  });
+// Minimal debug/me endpoint (extended with username/xp/level)
+app.get('/auth/me', async (req, res) => {
+  try {
+    const cookies = parseCookies(req.headers.cookie || '');
+    const sid = cookies[CFG.COOKIE_NAME];
+    if (!sid) { return res.status(401).send('Unauthorized'); }
+    const now = nowSec();
+    const sess = await new Promise((resolve)=>{
+      db.get('SELECT account_id FROM sessions WHERE id=? AND revoked=0 AND expires_at > ? LIMIT 1', [sid, now], (err, row) => resolve(err ? null : row));
+    });
+    if (!sess || !sess.account_id) { return res.status(401).send('Unauthorized'); }
+    const acc = sess.account_id;
+    const banRow = await new Promise((resolve)=>{
+      db.get('SELECT banned FROM accounts WHERE id=? LIMIT 1', [acc], (err,row)=>resolve(err?null:row));
+    });
+    if (banRow && Number(banRow.banned)) { return res.status(403).send('Banned'); }
+    const link = await new Promise((resolve)=>{
+      db.get('SELECT discord_user_id AS did FROM discord_links WHERE account_id=? LIMIT 1', [acc], (err,row)=>resolve(err?null:row));
+    });
+    const unameRow = link ? await new Promise((resolve)=>{
+      db.get('SELECT username FROM users WHERE discord_id=? LIMIT 1', [link.did], (err,row)=>resolve(err?null:row));
+    }) : null;
+    const xpRow = await new Promise((resolve)=>{
+      db.get('SELECT account_xp AS xp FROM accounts WHERE id=? LIMIT 1', [acc], (err,row)=>resolve(err?null:row));
+    });
+    const xp = (xpRow && xpRow.xp) ? (xpRow.xp|0) : 0;
+        const lvlInfo = accountXpToLevel(xp|0);
+    const payload = {
+      account_id: acc,
+      discord_id: link && link.did ? String(link.did) : '',
+      username: (unameRow && unameRow.username) ? String(unameRow.username) : '',
+      account_xp: xp|0,
+      account_level: lvlInfo.level|0,
+      xpNeeded: lvlInfo.xpNeeded|0
+    };
+
+    res.json(payload);
+  } catch(e) {
+    
+    res.status(500).send('DB error');
+  }
+});
+
+// Public leaderboard of top accounts by account_xp (offline included)
+app.get('/auth/leaderboard', (req, res) => {
+  try {
+    const limitRaw = req.query.limit;
+    let limit = 50;
+    if (typeof limitRaw !== 'undefined') {
+      const n = parseInt(String(limitRaw), 10);
+      if (!Number.isNaN(n) && n > 0) limit = n;
+    }
+    limit = Math.min(limit, 200);
+
+    const sql = `
+      SELECT a.account_xp AS xp, dl.discord_user_id AS did, u.username AS uname
+      FROM accounts a
+      LEFT JOIN discord_links dl ON dl.account_id = a.id
+      LEFT JOIN users u ON u.discord_id = dl.discord_user_id
+      ORDER BY a.account_xp DESC
+      LIMIT ?
+    `;
+
+    db.all(sql, [limit], (err, rows) => {
+      if (err) { return res.status(500).send('DB error'); }
+
+      const out = (rows || []).map(r => {
+        const info = accountXpToLevel(r.xp || 0);
+        const name = (r.uname && String(r.uname)) || (r.did && String(r.did)) || 'Unnamed';
+        const row = { name, level: info.level, xp: info.xp, xpNeeded: info.xpNeeded };
+        return row;
+      });
+
+      res.json(out);
+    });
+  } catch (e) {
+
+    res.status(500).send('Error');
+  }
+});
+
+// Compatibility alias for clients expecting /api/leaderboard
+app.get('/api/leaderboard', (req, res) => {
+  try {
+    const limitRaw = req.query.limit;
+    let limit = 50;
+    if (typeof limitRaw !== 'undefined') {
+      const n = parseInt(String(limitRaw), 10);
+      if (!Number.isNaN(n) && n > 0) limit = n;
+    }
+    limit = Math.min(limit, 200);
+
+    const sql = `
+      SELECT a.account_xp AS xp, dl.discord_user_id AS did, u.username AS uname
+      FROM accounts a
+      LEFT JOIN discord_links dl ON dl.account_id = a.id
+      LEFT JOIN users u ON u.discord_id = dl.discord_user_id
+      ORDER BY a.account_xp DESC
+      LIMIT ?
+    `;
+
+    db.all(sql, [limit], (err, rows) => {
+      if (err) { return res.status(500).send('DB error'); }
+
+      const out = (rows || []).map(r => {
+        const info = accountXpToLevel(r.xp || 0);
+        const name = (r.uname && String(r.uname)) || (r.did && String(r.did)) || 'Unnamed';
+        return { name, level: info.level, xp: info.xp, xpNeeded: info.xpNeeded };
+      });
+
+      res.json(out);
+    });
+  } catch (e) {
+
+    res.status(500).send('Error');
+  }
 });
 
 const PORT = process.env.AUTH_PORT ? parseInt(process.env.AUTH_PORT, 10) : 3000;

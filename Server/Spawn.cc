@@ -221,8 +221,20 @@ void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
     player.set_score(level_to_score(camera.get_respawn_level()));
     player.set_loadout_count(loadout_slots_at_level(camera.get_respawn_level()));
     player.health = player.max_health = hp_at_level(camera.get_respawn_level());
+    bool replaced_unique_basic = false;
     for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
         PetalID::T id = camera.get_inventory(i);
+        if (!replaced_unique_basic && id == PetalID::kBasic) {
+            bool has_common_basic = false;
+            for (uint32_t j = 0; j < player.get_loadout_count(); ++j) {
+                if (camera.get_inventory(j) == PetalID::kBasic) { has_common_basic = true; break; }
+            }
+            if (has_common_basic && PetalTracker::get_count(sim, PetalID::kUniqueBasic) == 0 && frand() < UNIQUE_BASIC_REPLACE_CHANCE / 100) {
+                id = PetalID::kUniqueBasic;
+                replaced_unique_basic = true;
+                PetalTracker::add_petal(sim, PetalID::kUniqueBasic);
+            }
+        }
         LoadoutSlot &slot = player.loadout[i];
         player.set_loadout_ids(i, id);
         slot.update_id(sim, id);

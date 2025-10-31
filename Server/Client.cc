@@ -5,6 +5,11 @@
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
 #include <Server/Account/AccountLink.hh>
+#ifdef WASM_SERVER
+#include <Server/Account/WasmAccountStore.hh>
+extern "C" void add_account_xp_js(const char *account_id_c, int delta);
+#endif
+
 
 
 #include <Helpers/UTF8.hh>
@@ -144,8 +149,22 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (pos >= MAX_SLOT_COUNT + player.get_loadout_count()) break;
             PetalID::T old_id = player.get_loadout_ids(pos);
                         if (old_id != PetalID::kNone && old_id != PetalID::kBasic) {
-                uint8_t rarity = PETAL_DATA[old_id].rarity;
-                player.set_score(player.get_score() + RARITY_TO_XP[rarity]);
+                                uint8_t rarity = PETAL_DATA[old_id].rarity;
+                uint32_t gained = RARITY_TO_XP[rarity];
+                player.set_score(player.get_score() + gained);
+                // Also grant Account XP for trashing non-basic petals
+#ifndef WASM_SERVER
+                if (!client->account_id.empty()) {
+                    AuthDB::add_account_xp(client->account_id, (int)gained);
+                    Server::game.send_account_level_to_account(client->account_id);
+                }
+#else
+                if (!client->account_id.empty()) {
+                    WasmAccountStore::add_xp(client->account_id, gained);
+                    add_account_xp_js(client->account_id.c_str(), (int)gained);
+                    Server::game.send_account_level_to_account(client->account_id);
+                }
+#endif
                 // Trashing removes the petal from the world immediately, freeing up uniqueness
                 player.deleted_petals.push_back(old_id);
                 PetalTracker::remove_petal(simulation, old_id);

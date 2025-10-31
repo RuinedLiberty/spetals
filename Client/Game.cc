@@ -54,8 +54,6 @@ EM_JS(int, get_is_logged_in, (), {
 });
 }
 
-
-
 static double g_last_time = 0;
 float const MAX_TRANSITION_CIRCLE = 2500;
 
@@ -76,6 +74,8 @@ namespace Game {
     std::string disconnect_message;
     std::array<uint8_t, PetalID::kNumPetals> seen_petals;
     std::array<uint8_t, MobID::kNumMobs> seen_mobs;
+    std::array<uint32_t, ENTITY_CAP> entity_account_level{};
+    EntityID top_account_leader;
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> cached_loadout = {PetalID::kNone};
 
     double timestamp = 0;
@@ -86,7 +86,9 @@ namespace Game {
     float transition_circle = 0;
 
     uint32_t respawn_level = 1;
-
+    uint32_t account_level = 1;
+    uint32_t account_xp = 0;
+    uint32_t account_xp_needed = 1;
 
     uint8_t loadout_count = 5;
     uint8_t simulation_ready = 0;
@@ -102,6 +104,8 @@ void Game::init() {
             Storage::retrieve();
     reset();
 
+    // Make account XP multiplier available to JS (used by Title Screen leaderboard calc)
+    EM_ASM({ try { Module.ACCOUNT_XP_MULT = $0|0; } catch(e) {} }, ACCOUNT_XP_MULTIPLIER);
 
         // Prime login state immediately
     update_logged_in_as();
@@ -153,9 +157,10 @@ void Game::init() {
     );
     title_ui_window.add_child(
         Ui::make_changelog()
-    );
+        );
+    // Account leaderboard (title screen only)
     title_ui_window.add_child(
-        Ui::make_github_link_button()
+        Ui::make_title_account_leaderboard()
     );
     game_ui_window.add_child(
         Ui::make_death_main_screen()
@@ -229,6 +234,9 @@ void Game::reset() {
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         cached_loadout[i] = PetalID::kNone;
     simulation.reset();
+    // Clear cached entity account levels
+    for (uint32_t i = 0; i < ENTITY_CAP; ++i) entity_account_level[i] = 0;
+    top_account_leader = NULL_ENTITY;
 }
 
 uint8_t Game::alive() {

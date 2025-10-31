@@ -11,7 +11,7 @@ namespace Ui {
         virtual void on_render(Renderer &) override;
     };
 
-    class LeaderboardSlot final : public Element {
+        class LeaderboardSlot final : public Element {
     public:
         uint8_t pos;
         LerpFloat ratio;
@@ -19,6 +19,15 @@ namespace Ui {
 
         virtual void on_render(Renderer &) override;
     };
+
+    class AccountLevelBar final : public Element {
+    public:
+        LerpFloat progress;
+        uint32_t level;
+        AccountLevelBar();
+        virtual void on_render(Renderer &) override;
+    };
+
 
     class Minimap final : public Element {
     public:
@@ -47,8 +56,8 @@ namespace Ui {
     Element *make_leaderboard();
     Element *make_level_bar();
     Element *make_minimap();
-    Element *make_overlevel_indicator();
-    Element *make_mobile_attack_button();
+        Element *make_overlevel_indicator();
+        Element *make_mobile_attack_button();
     Element *make_mobile_defend_button();
     Element *make_mobile_joystick();
 }

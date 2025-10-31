@@ -6,8 +6,9 @@ uint32_t const MAX_LEVEL = 99;
 uint32_t const TPS = 20;
 
 uint32_t const BOT_COUNT = 20;
+uint32_t const ACCOUNT_XP_MULTIPLIER = 30;
 
-float const PETAL_DISABLE_DELAY = 45.0f; //seconds
+float const PETAL_DISABLE_DELAY = 45.0f;
 float const PLAYER_ACCELERATION = 5.38f;
 float const MOB_ACCELERATION = 5.38f;
 float const DEFAULT_FRICTION = 1.0f/3.0f;
@@ -20,21 +21,23 @@ float const BASE_FOV = 0.9f;
 float const BASE_HEALTH = 100.0f;
 float const BASE_BODY_DAMAGE = 25.0f;
 
+float const UNIQUE_BASIC_REPLACE_CHANCE = 0.1f;
+
 uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
 uint8_t const ENABLE_BOT_INVENTORY_OVERLAY = 0;
 
 float const DROP_RATE_MULTIPLIER_COMMON = 3.0f;
 float const DROP_RATE_MULTIPLIER_UNUSUAL = 3.5f;
-float const DROP_RATE_MULTIPLIER_RARE = 4.0f;
-float const DROP_RATE_MULTIPLIER_EPIC = 5.0f;
-float const DROP_RATE_MULTIPLIER_LEGENDARY = 5.0f;
-float const DROP_RATE_MULTIPLIER_UNIQUE = 10.0f;
+float const DROP_RATE_MULTIPLIER_RARE = 3.0f;
+float const DROP_RATE_MULTIPLIER_EPIC = 3.0f;
+float const DROP_RATE_MULTIPLIER_LEGENDARY = 3.0f;
+float const DROP_RATE_MULTIPLIER_UNIQUE = 3.0f;
 
 float const DROP_RATE_MIN_COMMON = 0.0f;
 float const DROP_RATE_MIN_UNUSUAL = 0.0f;
 float const DROP_RATE_MIN_RARE = 0.0f;
-float const DROP_RATE_MIN_EPIC = 0.5f;
-float const DROP_RATE_MIN_LEGENDARY = 0.1f;
+float const DROP_RATE_MIN_EPIC = 0.0f;
+float const DROP_RATE_MIN_LEGENDARY = 0.0f;
 float const DROP_RATE_MIN_UNIQUE = 0.0f;
 
 std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
@@ -103,7 +106,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {
-            .constant_heal = 1,
+            .constant_heal = 10,
             .icon_angle = -1
         }
     },

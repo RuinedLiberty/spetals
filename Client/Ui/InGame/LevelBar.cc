@@ -50,6 +50,8 @@ void LevelBar::on_render(Renderer &ctx) {
 Element *Ui::make_level_bar() {
     Element *level_bar = new Ui::VContainer({
         new Ui::LevelBar(),
+        // Account level (blue) bar just under the flower level bar
+        new Ui::AccountLevelBar(),
         new Ui::DynamicText(14, [](){
             std::string format_string;
             if (Game::alive()) {

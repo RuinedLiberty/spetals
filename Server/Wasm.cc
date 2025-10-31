@@ -3,6 +3,8 @@
 #include <Server/Server.hh>
 
 #include <Shared/Config.hh>
+#include <Shared/StaticData.hh>
+
 
 #include <iostream>
 #include <string>
@@ -75,11 +77,18 @@ extern "C" void record_mob_kill_js(const char *account_id_c, int mob_id) {
     }, account_id_c, mob_id);
 }
 
+extern "C" void add_account_xp_js(const char *account_id_c, int delta) {
+    EM_ASM({
+        try { Module.addAccountXp(UTF8ToString($0), $1|0); } catch(e) {}
+    }, account_id_c, delta);
+}
+
 extern "C" void record_petal_obtained_js(const char *account_id_c, int petal_id) {
     EM_ASM({
         try { Module.recordPetalObtained(UTF8ToString($0), $1); } catch(e) {}
     }, account_id_c, petal_id);
 }
+
 
 extern "C" void wasm_gallery_mark_for(const char *account_id_c, int mob_id) {
     if (!account_id_c) return;
@@ -101,6 +110,18 @@ extern "C" void wasm_send_petal_gallery_for(const char *account_id_c) {
     if (!account_id_c) return;
     Server::game.send_petal_gallery_to_account(std::string(account_id_c));
 }
+
+extern "C" void wasm_set_account_xp(const char *account_id_c, int xp) {
+    if (!account_id_c) return;
+    WasmAccountStore::set_xp(std::string(account_id_c), (uint32_t)xp);
+}
+
+extern "C" void wasm_send_account_level_for(const char *account_id_c) {
+    if (!account_id_c) return;
+    Server::game.send_account_level_to_account(std::string(account_id_c));
+}
+
+
 
 WebSocketServer::WebSocketServer() {
     EM_ASM((function(){
@@ -187,13 +208,27 @@ WebSocketServer::WebSocketServer() {
                 account_xp INTEGER DEFAULT 0,\
                 account_level INTEGER DEFAULT 1\
             )');
-            db.run('CREATE TABLE IF NOT EXISTS accounts (\
+                        db.run('CREATE TABLE IF NOT EXISTS accounts (\
                 id TEXT PRIMARY KEY,\
                 created_at INTEGER NOT NULL,\
                 updated_at INTEGER NOT NULL,\
                 banned INTEGER NOT NULL DEFAULT 0,\
                 ban_reason TEXT\
             )');
+                        // Migration: ensure account_xp column exists on accounts (async-safe)
+            try {
+                db.all('PRAGMA table_info(accounts)', [], function(err, rows){
+                    if (err) return;
+                    let hasCol = false;
+                    if (Array.isArray(rows)) {
+                        for (const r of rows) { if (r && r.name === 'account_xp') { hasCol = true; break; } }
+                    }
+                    if (!hasCol) {
+                        try { db.run('ALTER TABLE accounts ADD COLUMN account_xp INTEGER NOT NULL DEFAULT 0', function(_){}); } catch(e) {}
+                    }
+                });
+            } catch(e) {}
+
                         db.run('CREATE TABLE IF NOT EXISTS discord_links (\
                 account_id TEXT NOT NULL,\
                 discord_user_id TEXT NOT NULL UNIQUE,\
@@ -229,12 +264,18 @@ WebSocketServer::WebSocketServer() {
                 db.run('INSERT INTO mob_kills (account_id, mob_id, kills) VALUES (?, ?, 1) ON CONFLICT(account_id, mob_id) DO UPDATE SET kills = kills + 1', [accountId, mobId]);
             } catch(e) {}
         };
-        Module.recordPetalObtained = function(accountId, petalId) {
+                Module.recordPetalObtained = function(accountId, petalId) {
             try {
                 db.run('INSERT INTO petal_obtained (account_id, petal_id, obtained) VALUES (?, ?, 1) ON CONFLICT(account_id, petal_id) DO NOTHING', [accountId, petalId]);
             } catch(e) {}
         };
-                Module.seedGalleryForAccount = function(accountId) {
+        // Persist Account XP to DB (accounts.account_xp)
+        Module.addAccountXp = function(accountId, delta) {
+            try {
+                db.run('UPDATE accounts SET account_xp = COALESCE(account_xp, 0) + ? WHERE id=?', [ (delta|0), accountId ]);
+            } catch(e) {}
+        };
+                                Module.seedGalleryForAccount = function(accountId) {
             try {
                 // Seed mob gallery
                 db.all('SELECT mob_id FROM mob_kills WHERE account_id=?', [accountId], function(err, rows){
@@ -264,6 +305,18 @@ WebSocketServer::WebSocketServer() {
                         }
                         try { _wasm_send_petal_gallery_for(ptr2); } catch(e) {}
                         _free(ptr2);
+                    } catch(e) {}
+                });
+                // Seed account XP into WASM memory as well
+                                db.get('SELECT account_xp FROM accounts WHERE id=? LIMIT 1', [accountId], function(err, row){
+                    try {
+                        const xp = (!err && row && row.account_xp ? row.account_xp|0 : 0);
+                        const len3 = lengthBytesUTF8(accountId) + 1;
+                        const ptr3 = _malloc(len3);
+                        stringToUTF8(accountId, ptr3, len3);
+                        try { _wasm_set_account_xp(ptr3, xp|0); } catch(e) {}
+                        try { _wasm_send_account_level_for(ptr3); } catch(e) {}
+                        _free(ptr3);
                     } catch(e) {}
                 });
             } catch(e) {}
@@ -386,24 +439,88 @@ WebSocketServer::WebSocketServer() {
 
 
                 // API: minimal account info
-                if (req.url.startsWith("/api/me")) {
+                                                if (req.url.startsWith("/api/me")) {
                     const cookies = parseCookies(req.headers.cookie||"");
                     const tok = cookies[SESS_COOKIE];
-                    const row = tok ? await new Promise((resolve)=>{ db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [tok], function(err,row){ resolve(err?null:row); }); }) : null;
-                    if (!row || row.revoked) { res.writeHead(401).end("Unauthorized"); return; }
+                    const srow = tok ? await new Promise((resolve)=>{ db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [tok], function(err,row){ resolve(err?null:row); }); }) : null;
+                    if (!srow || srow.revoked) { console.warn('[WASM][ME] unauthorized: invalid session'); res.writeHead(401).end("Unauthorized"); return; }
                     const now = Math.floor(Date.now()/1000);
-                    if (now > Number(row.expires_at)) { res.writeHead(401).end("Unauthorized"); return; }
-                    const link = await new Promise((resolve)=>{ db.get('SELECT discord_user_id FROM discord_links WHERE account_id=? LIMIT 1', [row.account_id], function(err,row){ resolve(err?null:row); }); });
-                    if (!link) { res.writeHead(401).end("Unauthorized"); return; }
-                    db.all("SELECT discord_id, username, account_xp, account_level FROM users WHERE discord_id=?", [link.discord_user_id], function(err, rows) {
-                        if (err) { res.writeHead(500).end("DB Error"); return; }
-                        const out = (rows && rows[0]) ? rows[0] : { discord_id: link.discord_user_id, username: '', account_xp: 0, account_level: 1 };
-                        res.writeHead(200, { "Content-Type": "application/json" });
-                        res.end(JSON.stringify(out));
-                    });
+                    if (now > Number(srow.expires_at)) { console.warn('[WASM][ME] unauthorized: expired'); res.writeHead(401).end("Unauthorized"); return; }
+                    const link = await new Promise((resolve)=>{ db.get('SELECT discord_user_id FROM discord_links WHERE account_id=? LIMIT 1', [srow.account_id], function(err,row){ resolve(err?null:row); }); });
+                    if (!link) { console.warn('[WASM][ME] unauthorized: no link for account', srow.account_id); res.writeHead(401).end("Unauthorized"); return; }
+                    const unameRow = await new Promise((resolve)=>{ db.get('SELECT username FROM users WHERE discord_id=? LIMIT 1', [link.discord_user_id], function(err,row){ resolve(err?null:row); }); });
+                    const accountRow = await new Promise((resolve)=>{ db.get('SELECT account_xp FROM accounts WHERE id=? LIMIT 1', [srow.account_id], function(err,row){ resolve(err?null:row); }); });
+                    function scoreToPassLevel(level){ return Math.floor(Math.pow(1.06, level - 1) * level) + 3; }
+                    const MAX_LEVEL = 99;
+                    const M = (function(){ try { return parseInt(process.env.ACCOUNT_XP_MULT||String($3),10)||$3; } catch(e){ return $3; } })();
+                    let totalXp = (accountRow && accountRow.account_xp) ? (accountRow.account_xp|0) : 0;
+                    let lvl = 1; let rem = totalXp|0;
+                    while (lvl < MAX_LEVEL) { const need = scoreToPassLevel(lvl) * M; if (rem < need) break; rem -= need; lvl++; }
+                    const out = {
+                        account_id: srow.account_id,
+                        discord_id: link.discord_user_id,
+                        username: (unameRow && unameRow.username) ? String(unameRow.username) : '',
+                        account_xp: totalXp|0,
+                        account_level: lvl|0
+                    };
+                    res.writeHead(200, { "Content-Type": "application/json" });
+                    res.end(JSON.stringify(out));
                     return;
                 }
 
+
+                
+                // Leaderboard: top accounts by account_xp (exclude bots implicitly; bots have no accounts row)
+                if (req.url.startsWith("/api/leaderboard") || req.url.startsWith("/auth/leaderboard")) {
+                    try {
+                        const u = new URL(req.url, "http://localhost");
+                        const limitRaw = u.searchParams.get('limit');
+                        let limit = 50;
+                        if (limitRaw !== null) {
+                            const n = parseInt(String(limitRaw), 10);
+                            if (!Number.isNaN(n) && n > 0) limit = n;
+                        }
+                        limit = Math.min(limit, 200);
+                        // compute account level from xp using same curve as C++ (score_to_pass_level * 100)
+                                                                        function scoreToPassLevel(level) { return Math.floor(Math.pow(1.06, level - 1) * level) + 3; }
+                        const MAX_LEVEL = 99;
+                        const M = (function(){ try { return parseInt(process.env.ACCOUNT_XP_MULT||String($3),10)||$3; } catch(e){ return $3; } })();
+                        function accountXpToLevel(totalXp) {
+                            let level = 1;
+                            let remaining = Math.max(0, Number(totalXp|0));
+                            while (level < MAX_LEVEL) {
+                                const need = scoreToPassLevel(level) * M;
+                                if (remaining < need) break;
+                                remaining -= need;
+                                level++;
+                            }
+                            return { level, xp: remaining, xpNeeded: (level >= MAX_LEVEL) ? 0xffffffff : scoreToPassLevel(level) * M };
+                        }
+                        const sql = `
+                            SELECT a.account_xp AS xp, dl.discord_user_id AS did, u.username AS uname
+                            FROM accounts a
+                            LEFT JOIN discord_links dl ON dl.account_id = a.id
+                            LEFT JOIN users u ON u.discord_id = dl.discord_user_id
+                            ORDER BY a.account_xp DESC
+                            LIMIT ?
+                        `;
+                                                db.all(sql, [limit], function(err, rows){
+                            if (err) { try { console.error('[WASM][LB] db error', err); } catch(_) {} res.writeHead(500).end("DB error"); return; }
+
+                            const out = (rows||[]).map(function(r){
+                                const lvl = accountXpToLevel(r.xp || 0);
+                                const name = (r && r.uname ? String(r.uname) : (r && r.did ? String(r.did) : 'Unnamed'));
+                                return { name, level: lvl.level, xp: lvl.xp, xpNeeded: lvl.xpNeeded };
+                            });
+
+                            res.writeHead(200, { "Content-Type": "application/json" });
+                            res.end(JSON.stringify(out));
+                        });
+                    } catch(e) {
+                        res.writeHead(500).end("Error");
+                    }
+                    return;
+                }
 
                 // Static file server
                 let encodeType = "text/html";
@@ -418,6 +535,15 @@ WebSocketServer::WebSocketServer() {
                     case "/gardn-client.wasm":
                         encodeType = "application/wasm";
                         file = "gardn-client.wasm";
+                        break;
+                    case "/favicon-32x32.png":
+                        encodeType = "image/png";
+                        file = "favicon-32x32.png";
+                        break;
+                    case "/favicon.ico":
+                        // Serve the PNG as a fallback for favicon.ico requests
+                        encodeType = "image/png";
+                        file = "favicon-32x32.png";
                         break;
                     default:
                         file = "";
@@ -543,7 +669,7 @@ WebSocketServer::WebSocketServer() {
             });
         })
 
-    })(), SERVER_PORT, INCOMING_BUFFER, MAX_BUFFER_LEN);
+    })(), SERVER_PORT, INCOMING_BUFFER, MAX_BUFFER_LEN, ACCOUNT_XP_MULTIPLIER);
 }
 
 void Server::run() {
