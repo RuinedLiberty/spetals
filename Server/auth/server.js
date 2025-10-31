@@ -285,6 +285,7 @@ app.get('/auth/leaderboard', (req, res) => {
       FROM accounts a
       LEFT JOIN discord_links dl ON dl.account_id = a.id
       LEFT JOIN users u ON u.discord_id = dl.discord_user_id
+      WHERE a.account_xp > 0
       ORDER BY a.account_xp DESC
       LIMIT ?
     `;
@@ -307,6 +308,21 @@ app.get('/auth/leaderboard', (req, res) => {
   }
 });
 
+// Count of accounts with non-zero XP
+app.get('/auth/leaderboard/count', (req, res) => {
+    try {
+    const sql = 'SELECT COUNT(*) AS total FROM accounts WHERE account_xp > 0';
+    db.get(sql, [], (err, row) => {
+      if (err) { return res.status(500).send('DB error'); }
+      const total = row && row.total ? (row.total|0) : 0;
+      res.json({ total });
+    });
+
+  } catch (e) {
+    res.status(500).send('Error');
+  }
+});
+
 // Compatibility alias for clients expecting /api/leaderboard
 app.get('/api/leaderboard', (req, res) => {
   try {
@@ -323,6 +339,7 @@ app.get('/api/leaderboard', (req, res) => {
       FROM accounts a
       LEFT JOIN discord_links dl ON dl.account_id = a.id
       LEFT JOIN users u ON u.discord_id = dl.discord_user_id
+      WHERE a.account_xp > 0
       ORDER BY a.account_xp DESC
       LIMIT ?
     `;
@@ -340,6 +357,21 @@ app.get('/api/leaderboard', (req, res) => {
     });
   } catch (e) {
 
+    res.status(500).send('Error');
+  }
+});
+
+// Count alias
+app.get('/api/leaderboard/count', (req, res) => {
+    try {
+    const sql = 'SELECT COUNT(*) AS total FROM accounts WHERE account_xp > 0';
+    db.get(sql, [], (err, row) => {
+      if (err) { return res.status(500).send('DB error'); }
+      const total = row && row.total ? (row.total|0) : 0;
+      res.json({ total });
+    });
+
+  } catch (e) {
     res.status(500).send('Error');
   }
 });

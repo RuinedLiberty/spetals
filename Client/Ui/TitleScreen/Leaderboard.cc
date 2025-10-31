@@ -51,26 +51,38 @@ extern "C" {
                         return j;
                     } catch (e) { log('fetch error', url, e && e.message); return null; }
                 };
+                // Fetch list; remember which source succeeded so we match count to the same backend/DB
+                let source = null;
                 let data = await tryFetch('/api/leaderboard/accounts');
-                if (!data) data = await tryFetch('/api/leaderboard');
-                if (!data) data = await tryFetch('/auth/leaderboard');
+                if (Array.isArray(data)) { source = 'api'; }
+                if (!Array.isArray(data)) { data = await tryFetch('/api/leaderboard'); if (Array.isArray(data)) { source = 'api'; } }
+                if (!Array.isArray(data)) { data = await tryFetch('/auth/leaderboard'); if (Array.isArray(data)) { source = 'auth'; } }
+                // fetch total count of accounts with xp > 0 from the same source; fallback to the other if the first fails
+                let cnt = null;
+                if (source === 'api') cnt = await tryFetch('/api/leaderboard/count');
+                if (source === 'auth') cnt = await tryFetch('/auth/leaderboard/count');
+                if (!cnt) cnt = await tryFetch('/api/leaderboard/count') || await tryFetch('/auth/leaderboard/count');
+
+
                 let list = Array.isArray(data) ? data.slice() : [];
                 // ensure self is included if logged in, even if not top N
                 const me = await tryFetch('/api/me');
                 if (me && (me['username'] || me['discord_id'])) {
                     const selfName = String(me['username'] || me['discord_id'] || 'Unnamed');
                     const selfXp = (me['account_xp']|0) || 0;
-                    let selfLevel = (me['account_level']|0) || 1;
-                    // Fallback if account_level missing
-                    if (!me['account_level']) {
-                        // derive level from XP approximately
-                        selfLevel = 1; let left = selfXp|0; while (selfLevel < 99) { const need = calcNeed(selfLevel); if (left < need) break; left -= need; selfLevel++; }
+                    if (selfXp > 0) { // do not include self if no XP, per requirement
+                        let selfLevel = (me['account_level']|0) || 1;
+                        // Fallback if account_level missing
+                        if (!me['account_level']) {
+                            // derive level from XP approximately
+                            selfLevel = 1; let left = selfXp|0; while (selfLevel < 99) { const need = calcNeed(selfLevel); if (left < need) break; left -= need; selfLevel++; }
+                        }
+                        const selfXpNeeded = ((me['xpNeeded']|0) || calcNeed(selfLevel));
+                        const idx = list.findIndex(e => (String(e['name']||e['username']||e['user']||e['global_name']||"") === selfName));
+                        const row = { name: selfName, level: selfLevel|0, xp: (selfXp % Math.max(1,selfXpNeeded))|0, xpNeeded: selfXpNeeded|0, self: true };
+                        if (idx === -1) { list.push(row); }
+                        else { list[idx] = row; }
                     }
-                    const selfXpNeeded = ((me['xpNeeded']|0) || calcNeed(selfLevel));
-                    const idx = list.findIndex(e => (String(e['name']||e['username']||e['user']||e['global_name']||"") === selfName));
-                    const row = { name: selfName, level: selfLevel|0, xp: (selfXp % Math.max(1,selfXpNeeded))|0, xpNeeded: selfXpNeeded|0, self: true };
-                    if (idx === -1) { list.push(row); }
-                    else { list[idx] = row; }
                 } else {
                     // not logged in
                 }
@@ -88,6 +100,7 @@ extern "C" {
                     const inTop = selfIdx >= 0 && selfIdx < 10;
                     if (!inTop && selfIdx >= 0) top.push(mapped[selfIdx]);
                     Module.accountLeaderboard = top;
+                    Module.accountLeaderboardTotal = (cnt && cnt.total)|0;
                 } catch(err) { log('map/sort error', err && (err.stack||err.message)); }
             };
             Module._acctLbFetch = fetchIt;
@@ -97,6 +110,10 @@ extern "C" {
             if (!Module.ACCOUNT_XP_MULT) Module.ACCOUNT_XP_MULT = 100;
             fetchIt();
         }
+    });
+
+    EM_JS(int, get_account_leaderboard_total, (), {
+        return (Module.accountLeaderboardTotal|0) || 0;
     });
 
     EM_JS(void, fetch_account_leaderboard_now, (), {
@@ -209,12 +226,15 @@ namespace Ui {
 }
 
 Element *Ui::make_title_account_leaderboard() {
-    // Ensure background fetch is running
+    // Ensure background fetch is running and trigger a one-shot fetch now (helps after hot-reloads)
     update_account_leaderboard();
+    fetch_account_leaderboard_now();
 
     Element *header = new Ui::DynamicText(18, [](){
-        int n = get_account_lb_count();
-        if (n <= 0) return std::string("Leaderboard");
+        int n = get_account_leaderboard_total();
+        if (n <= 0) {
+            return std::string("Leaderboard");
+        }
         return std::format("Leaderboard ({})", n);
     });
 
