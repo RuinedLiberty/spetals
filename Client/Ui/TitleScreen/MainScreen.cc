@@ -107,8 +107,6 @@ Element *Ui::make_title_input_box() {
     return title;
 }
 
-
-
 Element *Ui::make_title_info_box() {
     Element *elt = new Ui::Choose(
         new Ui::Choose(
@@ -198,7 +196,7 @@ Element *Ui::make_panel_buttons() {
                 else Ui::panel_open = Panel::kNone;
             } },
             [](){ return Ui::panel_open == Panel::kPetals; },
-            { .fill = 0xff5a9fdb, .line_width = 5, .round_radius = 3 }
+            { .fill = 0xff5a9fdb, .line_width = 5, .round_radius = 3, .should_render = [](){ return is_logged_in(); } }
         ),
         new Ui::Button(100, 35, 
             new Ui::StaticText(16, "Mobs"), 
@@ -214,7 +212,7 @@ Element *Ui::make_panel_buttons() {
                 else Ui::panel_open = Panel::kNone;
             } },
             [](){ return Ui::panel_open == Panel::kMobs; },
-            { .fill = 0xff5a9fdb, .line_width = 5, .round_radius = 3 }
+            { .fill = 0xff5a9fdb, .line_width = 5, .round_radius = 3, .should_render = [](){ return is_logged_in(); } }
         ),
         new Ui::Button(120, 35, 
             new Ui::StaticText(16, "Changelog"), 

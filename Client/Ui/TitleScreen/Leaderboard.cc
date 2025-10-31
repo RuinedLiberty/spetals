@@ -11,6 +11,21 @@
 #include <string>
 #include <format>
 #include <emscripten.h>
+#include <cstdlib>
+
+extern "C" {
+    int get_is_logged_in();
+    char* get_logged_in_as();
+}
+
+static bool is_logged_in() {
+    int flag = get_is_logged_in();
+    if (flag) return true;
+    char *ptr = get_logged_in_as();
+    bool ok = (ptr && *ptr);
+    if (ptr) free(ptr);
+    return ok;
+}
 
 using namespace Ui;
 
@@ -203,7 +218,7 @@ Element *Ui::make_title_account_leaderboard() {
         return std::format("Leaderboard ({})", n);
     });
 
-    Container *lb = new Ui::Container({ header }, ACCOUNT_LB_WIDTH + 20, 48, { .fill = 0xffe6d34a, .line_width = 6, .round_radius = 7 });
+    Container *lb = new Ui::Container({ header }, ACCOUNT_LB_WIDTH + 20, 48, { .fill = 0xffe6d34a, .line_width = 6, .round_radius = 7, .should_render = [](){ return is_logged_in(); } });
 
     Element *list = new Ui::VContainer(
         Ui::make_range(0, ACCOUNT_LB_SIZE, [](uint32_t i){ return (Element*) new Ui::AccountLeaderboardSlot((uint8_t)i); })
@@ -213,7 +228,7 @@ Element *Ui::make_title_account_leaderboard() {
         .fill = 0xff555555,
         .line_width = 6,
         .round_radius = 7,
-        .should_render = [](){ return Game::should_render_title_ui(); },
+        .should_render = [](){ return Game::should_render_title_ui() && is_logged_in(); },
         .no_polling = 1
     });
     board->style.h_justify = Style::Right;

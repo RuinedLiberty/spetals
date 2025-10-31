@@ -275,7 +275,18 @@ WebSocketServer::WebSocketServer() {
                 db.run('UPDATE accounts SET account_xp = COALESCE(account_xp, 0) + ? WHERE id=?', [ (delta|0), accountId ]);
             } catch(e) {}
         };
-                                Module.seedGalleryForAccount = function(accountId) {
+        // Maintain a single authoritative top account id in memory for crown anchoring
+        function refreshTopAccount() {
+            try {
+                db.get('SELECT id FROM accounts ORDER BY account_xp DESC LIMIT 1', [], function(err, row){
+                    Module.topAccount = (!err && row && row.id) ? String(row.id) : "";
+                });
+            } catch(_) { Module.topAccount = ""; }
+        }
+        refreshTopAccount();
+        setInterval(refreshTopAccount, 5000);
+
+        Module.seedGalleryForAccount = function(accountId) {
             try {
                 // Seed mob gallery
                 db.all('SELECT mob_id FROM mob_kills WHERE account_id=?', [accountId], function(err, rows){
@@ -648,6 +659,7 @@ WebSocketServer::WebSocketServer() {
                             HEAPU8.set(data, $1);
                             _on_message(ws_id, len);
                         });
+                        try { refreshTopAccount(); } catch(_) {}
                         ws.on("close", function(reason) {
                             const uid = Module.sessionByWs.get(ws_id);
                             if (uid && Module.userActiveWs.get(uid) === ws_id)
