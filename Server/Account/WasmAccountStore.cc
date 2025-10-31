@@ -77,4 +77,14 @@ bool add_xp(const std::string &account_id, uint32_t delta) {
     return true;
 }
 
+bool get_top_account(std::string &account_id_out) {
+    std::lock_guard<std::mutex> lk(g_mu);
+    account_id_out.clear();
+    uint32_t best = 0; bool have = false;
+    for (auto const &kv : g_account_xp) {
+        if (!have || kv.second > best) { best = kv.second; account_id_out = kv.first; have = true; }
+    }
+    return have;
+}
+
 } // namespace WasmAccountStore

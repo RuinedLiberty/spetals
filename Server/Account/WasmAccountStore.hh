@@ -20,4 +20,7 @@ namespace WasmAccountStore {
     bool get_xp(const std::string &account_id, uint32_t &xp_out);
     bool set_xp(const std::string &account_id, uint32_t xp);
     bool add_xp(const std::string &account_id, uint32_t delta);
+
+    // Returns the account id with highest total XP in the in-memory store
+    bool get_top_account(std::string &account_id_out);
 }
