@@ -450,15 +450,15 @@ WebSocketServer::WebSocketServer() {
 
 
                 // API: minimal account info
-                                                if (req.url.startsWith("/api/me")) {
+                if (req.url.startsWith("/api/me")) {
                     const cookies = parseCookies(req.headers.cookie||"");
                     const tok = cookies[SESS_COOKIE];
                     const srow = tok ? await new Promise((resolve)=>{ db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [tok], function(err,row){ resolve(err?null:row); }); }) : null;
-                    if (!srow || srow.revoked) { console.warn('[WASM][ME] unauthorized: invalid session'); res.writeHead(401).end("Unauthorized"); return; }
+                    if (!srow || srow.revoked) { res.writeHead(401).end("Unauthorized"); return; }
                     const now = Math.floor(Date.now()/1000);
-                    if (now > Number(srow.expires_at)) { console.warn('[WASM][ME] unauthorized: expired'); res.writeHead(401).end("Unauthorized"); return; }
+                    if (now > Number(srow.expires_at)) { res.writeHead(401).end("Unauthorized"); return; }
                     const link = await new Promise((resolve)=>{ db.get('SELECT discord_user_id FROM discord_links WHERE account_id=? LIMIT 1', [srow.account_id], function(err,row){ resolve(err?null:row); }); });
-                    if (!link) { console.warn('[WASM][ME] unauthorized: no link for account', srow.account_id); res.writeHead(401).end("Unauthorized"); return; }
+                    if (!link) { res.writeHead(401).end("Unauthorized"); return; }
                     const unameRow = await new Promise((resolve)=>{ db.get('SELECT username FROM users WHERE discord_id=? LIMIT 1', [link.discord_user_id], function(err,row){ resolve(err?null:row); }); });
                     const accountRow = await new Promise((resolve)=>{ db.get('SELECT account_xp FROM accounts WHERE id=? LIMIT 1', [srow.account_id], function(err,row){ resolve(err?null:row); }); });
                     function scoreToPassLevel(level){ return Math.floor(Math.pow(1.06, level - 1) * level) + 3; }
@@ -478,11 +478,9 @@ WebSocketServer::WebSocketServer() {
                     res.end(JSON.stringify(out));
                     return;
                 }
-
-
                 
-                // Leaderboard: top accounts by account_xp (exclude bots implicitly; bots have no accounts row)
-                if (req.url.startsWith("/api/leaderboard") || req.url.startsWith("/auth/leaderboard")) {
+                if ((req.url.startsWith("/api/leaderboard") && !req.url.startsWith("/api/leaderboard/count")) || (req.url.startsWith("/auth/leaderboard") && !req.url.startsWith("/auth/leaderboard/count"))) {
+
                     try {
                         const u = new URL(req.url, "http://localhost");
                         const limitRaw = u.searchParams.get('limit');
@@ -493,7 +491,7 @@ WebSocketServer::WebSocketServer() {
                         }
                         limit = Math.min(limit, 200);
                         // compute account level from xp using same curve as C++ (score_to_pass_level * 100)
-                                                                        function scoreToPassLevel(level) { return Math.floor(Math.pow(1.06, level - 1) * level) + 3; }
+                        function scoreToPassLevel(level) { return Math.floor(Math.pow(1.06, level - 1) * level) + 3; }
                         const MAX_LEVEL = 99;
                         const M = (function(){ try { return parseInt(process.env.ACCOUNT_XP_MULT||String($3),10)||$3; } catch(e){ return $3; } })();
                         function accountXpToLevel(totalXp) {
@@ -512,11 +510,13 @@ WebSocketServer::WebSocketServer() {
                             FROM accounts a
                             LEFT JOIN discord_links dl ON dl.account_id = a.id
                             LEFT JOIN users u ON u.discord_id = dl.discord_user_id
+                            WHERE a.account_xp > 0
                             ORDER BY a.account_xp DESC
                             LIMIT ?
                         `;
-                                                db.all(sql, [limit], function(err, rows){
-                            if (err) { try { console.error('[WASM][LB] db error', err); } catch(_) {} res.writeHead(500).end("DB error"); return; }
+                        
+                        db.all(sql, [limit], function(err, rows){
+                                                        if (err) { res.writeHead(500).end("DB error"); return; }
 
                             const out = (rows||[]).map(function(r){
                                 const lvl = accountXpToLevel(r.xp || 0);
@@ -532,8 +532,20 @@ WebSocketServer::WebSocketServer() {
                     }
                     return;
                 }
+                // Count of accounts with non-zero XP
+                if (req.url.startsWith("/api/leaderboard/count") || req.url.startsWith("/auth/leaderboard/count")) {
+                    try {
+                        const sqlCount = 'SELECT COUNT(*) AS total FROM accounts WHERE account_xp > 0';
+                        db.get(sqlCount, [], function(err, row){
+                            if (err) { res.writeHead(500).end("DB error"); return; }
+                            const total = (row && row.total) ? (row.total|0) : 0;
+                            res.writeHead(200, { "Content-Type": "application/json" });
+                            res.end(JSON.stringify({ total }));
+                        });
+                    } catch(e) { res.writeHead(500).end("Error"); }
+                    return;
+                }
 
-                // Static file server
                 let encodeType = "text/html";
                 let file = "index.html";
                 switch (req.url) {
@@ -604,7 +616,6 @@ WebSocketServer::WebSocketServer() {
 
         const wss = new WSS.Server({ "server": server });
 
-
         let curr_id = 0;
             wss.on("connection", function(ws, req) {
             const ws_id = curr_id;
@@ -659,7 +670,7 @@ WebSocketServer::WebSocketServer() {
                             HEAPU8.set(data, $1);
                             _on_message(ws_id, len);
                         });
-                        try { refreshTopAccount(); } catch(_) {}
+                        refreshTopAccount();
                         ws.on("close", function(reason) {
                             const uid = Module.sessionByWs.get(ws_id);
                             if (uid && Module.userActiveWs.get(uid) === ws_id)
