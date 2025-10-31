@@ -29,7 +29,7 @@ static bool is_logged_in() {
 
 using namespace Ui;
 
-static constexpr uint32_t ACCOUNT_LB_SIZE = 10;
+static constexpr uint32_t ACCOUNT_LB_SIZE = 11;
 static constexpr float ACCOUNT_LB_WIDTH = 200.0f;
 
 extern "C" {
@@ -78,8 +78,14 @@ extern "C" {
                             selfLevel = 1; let left = selfXp|0; while (selfLevel < 99) { const need = calcNeed(selfLevel); if (left < need) break; left -= need; selfLevel++; }
                         }
                         const selfXpNeeded = ((me['xpNeeded']|0) || calcNeed(selfLevel));
+                        // Fetch true global rank for this account from same source as list
+                        let rres = null;
+                        if (source === 'api') rres = await tryFetch('/api/leaderboard/rank');
+                        if (source === 'auth') rres = await tryFetch('/auth/leaderboard/rank');
+                        if (!rres) rres = await tryFetch('/api/leaderboard/rank') || await tryFetch('/auth/leaderboard/rank');
+                        const selfRank = (rres && (rres['rank']|0)) || 0;
                         const idx = list.findIndex(e => (String(e['name']||e['username']||e['user']||e['global_name']||"") === selfName));
-                        const row = { name: selfName, level: selfLevel|0, xp: (selfXp % Math.max(1,selfXpNeeded))|0, xpNeeded: selfXpNeeded|0, self: true };
+                        const row = { name: selfName, level: selfLevel|0, xp: (selfXp % Math.max(1,selfXpNeeded))|0, xpNeeded: selfXpNeeded|0, rank: selfRank|0, self: true };
                         if (idx === -1) { list.push(row); }
                         else { list[idx] = row; }
                     }
@@ -92,7 +98,8 @@ extern "C" {
                         level: (e['level']|0),
                         xp: (e['xp']|0),
                         xpNeeded: (e['xpNeeded']|0) || (e['xp_needed']|0) || calcNeed((e['level']|0) || 1),
-                        self: !!e['self']
+                        self: !!e['self'],
+                        rank: (e['rank']|0)
                     }));
                     mapped.sort((a,b)=> (b.level - a.level) || (b.xp - a.xp));
                     let top = mapped.slice(0, 10);
@@ -146,6 +153,10 @@ extern "C" {
 
     EM_JS(int, get_account_lb_is_self, (int i), {
         return (Module.accountLeaderboard && Module.accountLeaderboard[i] && (Module.accountLeaderboard[i].self ? 1 : 0)) | 0;
+    });
+
+    EM_JS(int, get_account_lb_rank, (int i), {
+        return (Module.accountLeaderboard && Module.accountLeaderboard[i] && (Module.accountLeaderboard[i].rank|0)) | 0;
     });
 }
 
@@ -211,7 +222,11 @@ namespace Ui {
             std::string name = name_c ? std::string(name_c) : std::string();
             if (name_c) free(name_c);
             int level = get_account_lb_level(pos);
-            std::string text = std::format("#{} {} (Lv {})", (int)pos + 1, name.size() ? name : std::string("Unnamed"), level);
+            int rank = get_account_lb_rank(pos);
+            bool isSelf = get_account_lb_is_self(pos) != 0;
+            // For top 10 rows, use pos+1; for appended self row (11th) prefer true global rank when available
+            int displayN = ((isSelf && rank > 0 && pos >= 10) ? rank : ((int)pos + 1));
+            std::string text = std::format("#{} {} (Lv {})", displayN, name.size() ? name : std::string("Unnamed"), level);
 
             ctx.set_fill(0xffffffff);
             ctx.set_stroke(0xff222222);
