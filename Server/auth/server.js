@@ -323,6 +323,28 @@ app.get('/auth/leaderboard/count', (req, res) => {
   }
 });
 
+// Global rank for current session account (auth service)
+app.get('/auth/leaderboard/rank', (req, res) => {
+  try {
+    const cookies = (req.headers.cookie || '').split(';').reduce((o, c) => { const i=c.indexOf('='); if (i>0) o[c.slice(0,i).trim()] = decodeURIComponent(c.slice(i+1).trim()); return o; }, {});
+    const sid = cookies[CFG.COOKIE_NAME];
+    if (!sid) return res.status(401).send('Unauthorized');
+    const now = nowSec();
+    db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [sid], (err, sess) => {
+      if (err || !sess || sess.revoked || now > Number(sess.expires_at)) return res.status(401).send('Unauthorized');
+      db.get('SELECT account_xp AS xp FROM accounts WHERE id=? LIMIT 1', [sess.account_id], (err2, row2) => {
+        if (err2 || !row2) return res.status(500).send('DB error');
+        const xp = (row2.xp|0) || 0;
+        db.get('SELECT 1 + COUNT(*) AS rank FROM accounts WHERE account_xp > ?', [xp], (err3, row3) => {
+          if (err3 || !row3) return res.status(500).send('DB error');
+          return res.json({ rank: (row3.rank|0) || 0 });
+        });
+      });
+    });
+  } catch (e) { res.status(500).send('Error'); }
+});
+
+
 // Compatibility alias for clients expecting /api/leaderboard
 app.get('/api/leaderboard', (req, res) => {
   try {
@@ -363,7 +385,7 @@ app.get('/api/leaderboard', (req, res) => {
 
 // Count alias
 app.get('/api/leaderboard/count', (req, res) => {
-    try {
+  try {
     const sql = 'SELECT COUNT(*) AS total FROM accounts WHERE account_xp > 0';
     db.get(sql, [], (err, row) => {
       if (err) { return res.status(500).send('DB error'); }
@@ -375,6 +397,28 @@ app.get('/api/leaderboard/count', (req, res) => {
     res.status(500).send('Error');
   }
 });
+
+// Global rank for current session account (API alias)
+app.get('/api/leaderboard/rank', (req, res) => {
+  try {
+    const cookies = (req.headers.cookie || '').split(';').reduce((o, c) => { const i=c.indexOf('='); if (i>0) o[c.slice(0,i).trim()] = decodeURIComponent(c.slice(i+1).trim()); return o; }, {});
+    const sid = cookies[CFG.COOKIE_NAME];
+    if (!sid) return res.status(401).send('Unauthorized');
+    const now = nowSec();
+    db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [sid], (err, sess) => {
+      if (err || !sess || sess.revoked || now > Number(sess.expires_at)) return res.status(401).send('Unauthorized');
+      db.get('SELECT account_xp AS xp FROM accounts WHERE id=? LIMIT 1', [sess.account_id], (err2, row2) => {
+        if (err2 || !row2) return res.status(500).send('DB error');
+        const xp = (row2.xp|0) || 0;
+        db.get('SELECT 1 + COUNT(*) AS rank FROM accounts WHERE account_xp > ?', [xp], (err3, row3) => {
+          if (err3 || !row3) return res.status(500).send('DB error');
+          return res.json({ rank: (row3.rank|0) || 0 });
+        });
+      });
+    });
+  } catch (e) { res.status(500).send('Error'); }
+});
+
 
 const PORT = process.env.AUTH_PORT ? parseInt(process.env.AUTH_PORT, 10) : 3000;
 app.listen(PORT, () => {

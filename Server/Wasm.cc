@@ -545,6 +545,30 @@ WebSocketServer::WebSocketServer() {
                     } catch(e) { res.writeHead(500).end("Error"); }
                     return;
                 }
+                // Rank of current account by XP (1-based); requires valid session cookie
+                if (req.url.startsWith("/api/leaderboard/rank") || req.url.startsWith("/auth/leaderboard/rank")) {
+                    try {
+                        const cookies = parseCookies(req.headers.cookie||"");
+                        const tok = cookies[SESS_COOKIE];
+                        db.get('SELECT account_id, expires_at, revoked FROM sessions WHERE id=? LIMIT 1', [tok], function(err, srow){
+                            if (err || !srow || srow.revoked) { res.writeHead(401).end("Unauthorized"); return; }
+                            const now = Math.floor(Date.now()/1000);
+                            if (now > Number(srow.expires_at)) { res.writeHead(401).end("Unauthorized"); return; }
+                            db.get('SELECT account_xp AS xp FROM accounts WHERE id=? LIMIT 1', [srow.account_id], function(err2, row2){
+                                if (err2 || !row2) { res.writeHead(500).end("DB error"); return; }
+                                const xp = (row2.xp|0) || 0;
+                                db.get('SELECT 1 + COUNT(*) AS rank FROM accounts WHERE account_xp > ?', [xp], function(err3, row3){
+                                    if (err3 || !row3) { res.writeHead(500).end("DB error"); return; }
+                                    const rank = (row3.rank|0) || 0;
+                                    res.writeHead(200, { "Content-Type": "application/json" });
+                                    res.end(JSON.stringify({ rank }));
+                                });
+                            });
+                        });
+                    } catch(e) { res.writeHead(500).end("Error"); }
+                    return;
+                }
+
 
                 let encodeType = "text/html";
                 let file = "index.html";

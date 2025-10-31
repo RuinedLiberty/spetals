@@ -21,17 +21,17 @@ float const BASE_FOV = 0.9f;
 float const BASE_HEALTH = 100.0f;
 float const BASE_BODY_DAMAGE = 25.0f;
 
-float const UNIQUE_BASIC_REPLACE_CHANCE = 0.1f;
+float const UNIQUE_BASIC_REPLACE_CHANCE = 0.01f;
 
 uint8_t const ENABLE_MOB_HITBOX_DEBUG = 0;
 uint8_t const ENABLE_BOT_INVENTORY_OVERLAY = 0;
 
-float const DROP_RATE_MULTIPLIER_COMMON = 4.0f;
-float const DROP_RATE_MULTIPLIER_UNUSUAL = 4.0f;
-float const DROP_RATE_MULTIPLIER_RARE = 4.0f;
-float const DROP_RATE_MULTIPLIER_EPIC = 4.0f;
-float const DROP_RATE_MULTIPLIER_LEGENDARY = 4.0f;
-float const DROP_RATE_MULTIPLIER_UNIQUE = 4.0f;
+float const DROP_RATE_MULTIPLIER_COMMON = 3.0f;
+float const DROP_RATE_MULTIPLIER_UNUSUAL = 3.0f;
+float const DROP_RATE_MULTIPLIER_RARE = 3.0f;
+float const DROP_RATE_MULTIPLIER_EPIC = 3.0f;
+float const DROP_RATE_MULTIPLIER_LEGENDARY = 3.0f;
+float const DROP_RATE_MULTIPLIER_UNIQUE = 3.0f;
 
 float const DROP_RATE_MIN_COMMON = 0.0f;
 float const DROP_RATE_MIN_UNUSUAL = 0.0f;
@@ -106,7 +106,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {
-            .constant_heal = 10,
+            .constant_heal = 1,
             .icon_angle = -1
         }
     },
