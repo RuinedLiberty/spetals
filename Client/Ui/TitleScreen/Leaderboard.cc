@@ -203,7 +203,7 @@ Element *Ui::make_title_account_leaderboard() {
         return std::format("Leaderboard ({})", n);
     });
 
-    Container *lb = new Ui::Container({ header }, ACCOUNT_LB_WIDTH + 20, 48, { .fill = 0xff55bb55, .line_width = 6, .round_radius = 7 });
+    Container *lb = new Ui::Container({ header }, ACCOUNT_LB_WIDTH + 20, 48, { .fill = 0xffe6d34a, .line_width = 6, .round_radius = 7 });
 
     Element *list = new Ui::VContainer(
         Ui::make_range(0, ACCOUNT_LB_SIZE, [](uint32_t i){ return (Element*) new Ui::AccountLeaderboardSlot((uint8_t)i); })
