@@ -211,13 +211,43 @@ void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
     player.set_parent(camera.id);
     player.set_color(camera.get_color());
     uint32_t power = Map::difficulty_at_level(camera.get_respawn_level());
-    ZoneDefinition const &zone = MAP_DATA[Map::get_suitable_difficulty_zone(power)];
-    float spawn_x = lerp(zone.left, zone.right, frand());
-    float spawn_y = lerp(zone.top, zone.bottom, frand());
+        ZoneDefinition const &zone = MAP_DATA[Map::get_suitable_difficulty_zone(power)];
+
+    auto is_clear_from_players = [&](float px, float py) -> bool {
+        bool ok = true;
+        sim->for_each<kFlower>([&](Simulation *sm, Entity &other){
+            if (!ok) return;
+            if (other.id == player.id) return; // ignore the spawning player
+            if (other.has_component(kMob)) return; // only consider real players/bots
+            if (!sm->ent_alive(other.id)) return;
+            float dx = other.get_x() - px;
+            float dy = other.get_y() - py;
+            float dist = std::sqrt(dx*dx + dy*dy);
+            float minSep = other.get_radius() + player.get_radius() + 10.0f;
+            if (dist < minSep) ok = false;
+        });
+        return ok;
+    };
+
+    float spawn_x = player.get_x();
+    float spawn_y = player.get_y();
+    bool found = false;
+    for (uint32_t attempt = 0; attempt < 30; ++attempt) {
+        float px = lerp(zone.left, zone.right, frand());
+        float py = lerp(zone.top, zone.bottom, frand());
+        if (is_clear_from_players(px, py)) { spawn_x = px; spawn_y = py; found = true; break; }
+    }
+    if (!found) {
+        // fallback: still place within zone, even if crowded
+        spawn_x = lerp(zone.left, zone.right, frand());
+        spawn_y = lerp(zone.top, zone.bottom, frand());
+    }
+
     camera.set_camera_x(spawn_x);
     camera.set_camera_y(spawn_y);
     player.set_x(spawn_x);
     player.set_y(spawn_y);
+
     player.set_score(level_to_score(camera.get_respawn_level()));
     player.set_loadout_count(loadout_slots_at_level(camera.get_respawn_level()));
     player.health = player.max_health = hp_at_level(camera.get_respawn_level());

@@ -44,6 +44,22 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     uint32_t zone_id = Map::get_zone_from_pos(x, y);
     struct ZoneDefinition const &zone = MAP_DATA[zone_id];
     if (zone.density * (zone.right - zone.left) * (zone.bottom - zone.top) / (500 * 500) < sim->zone_mob_counts[zone_id]) return;
+
+    auto is_clear_from_players = [&](float px, float py, float radius) -> bool {
+        bool ok = true;
+        sim->for_each<kFlower>([&](Simulation *sm, Entity &pl){
+            if (!ok) return;
+            if (pl.has_component(kMob)) return; // only check player/bot flowers
+            if (!sm->ent_alive(pl.id)) return;
+            float dx = pl.get_x() - px;
+            float dy = pl.get_y() - py;
+            float dist = std::sqrt(dx*dx + dy*dy);
+            float minSep = pl.get_radius() + radius + 20.0f;
+            if (dist < minSep) ok = false;
+        });
+        return ok;
+    };
+
     float sum = 0;
     for (SpawnChance const &s : zone.spawns)
         sum += s.chance;
@@ -51,7 +67,21 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     for (SpawnChance const &s : zone.spawns) {
         sum -= s.chance;
         if (sum <= 0) {
-            Entity &ent = alloc_mob(sim, s.id, x, y, NULL_ENTITY);
+            // Try multiple offsets within the zone to avoid spawning on players
+            float sx = x, sy = y; bool placed = false; float rr = 0.0f;
+            // We need a temporary radius to check separation before entity exists.
+            float temp_radius = 20.0f; // fallback default
+            {
+                // Peek the mob radius using a deterministic seed approx; use midpoint of range
+                const MobData &md = MOB_DATA[s.id];
+                temp_radius = (md.radius.lower + md.radius.upper) * 0.5f;
+            }
+            for (uint32_t attempt = 0; attempt < 20; ++attempt) {
+                float px = lerp(zone.left, zone.right, frand());
+                float py = lerp(zone.top, zone.bottom, frand());
+                if (is_clear_from_players(px, py, temp_radius)) { sx = px; sy = py; placed = true; break; }
+            }
+            Entity &ent = alloc_mob(sim, s.id, sx, sy, NULL_ENTITY);
             ent.zone = zone_id;
             ent.immunity_ticks = TPS;
             BitMath::set(ent.flags, EntityFlags::kSpawnedFromZone);
@@ -60,6 +90,7 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
         }
     }
 }
+
 
 bool Map::find_spawn_location(Simulation *sim, float d, Vector &vref) {
     for (uint32_t i = 0; i < 10; ++i) {
