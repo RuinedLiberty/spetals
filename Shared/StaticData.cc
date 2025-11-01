@@ -1373,7 +1373,10 @@ uint32_t loadout_slots_at_level(uint32_t level) {
 
 float hp_at_level(uint32_t level) {
     if (level > MAX_LEVEL) level = MAX_LEVEL;
-    return BASE_HEALTH + level;
+    if (level < 1) level = 1;
+    float hp = BASE_HEALTH + (float)(level - 1) * (50.0f / 44.0f);
+    if (hp > 150.0f) hp = 150.0f;
+    return hp;
 }
 
 float apply_drop_rate_modifiers(float base_pct, uint8_t rarity) {
