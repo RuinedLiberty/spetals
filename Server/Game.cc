@@ -268,7 +268,7 @@ void GameInstance::add_client(Client *client) {
     ent.set_fov(BASE_FOV);
     ent.set_respawn_level(1);
     for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i)
-        ent.set_inventory(i, PetalID::kBasic);
+        ent.set_inventory(i, PetalID::kPowder);
     for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i)
         PetalTracker::add_petal(&simulation, ent.get_inventory(i));
         client->camera = ent.id;

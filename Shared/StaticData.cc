@@ -714,7 +714,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             .icon_angle = 0.25
         }
     },
-    {
+        {
         .name = "Soil",
         .description = "The bigger, the better!",
         .health = 10.0,
@@ -758,8 +758,21 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             .extra_petal_radius = 4.0f,
             .poison_damage = { .damage = 2.0, .time = 6.0 }
         }
+    },
+    {
+        .name = "Powder",
+        .description = "Light dust that makes you brisk.",
+        .health = 10.0,
+        .damage = 10.0,
+        .radius = 100.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = {
+        }
     }
 }};
+
 
 std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
     {
@@ -1130,7 +1143,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             }
         }
     },
-    {
+        {
         .name = "Desert Centipede",
         .description = "It doesn't like it when you interrupt its run.",
         .rarity = RarityID::kRare,
@@ -1141,10 +1154,12 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .drops = {
             PetalID::kSand,
             PetalID::kTriFaster,
+            PetalID::kPowder,
         },
         .drop_rates = {
             /* PetalID::kSand */ 12.00f,
             /* PetalID::kTriFaster */ 0.03f,
+            /* PetalID::kPowder */ 60.00f,
         },
         .attributes = {
             .segments = 6

@@ -28,6 +28,7 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
     player.set_equip_flags(0);
     player.damage_reflection = 0;
     player.poison_armor = 0;
+        bool has_powder = false;
     for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
         LoadoutSlot const &slot = player.loadout[i];
         PetalID::T slot_petal_id = slot.get_petal_id();
@@ -42,6 +43,7 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
         buffs.reload_factor *= (1.0f - attrs.reload_reduction);
         if (slot_petal_id == PetalID::kYinYang)
             ++buffs.yinyang_count;
+        if (slot_petal_id == PetalID::kPowder) has_powder = true;
         if (!player.loadout[i].already_spawned) continue;
         if (slot_petal_id == PetalID::kLeaf) 
             buffs.heal += attrs.constant_heal / TPS;
@@ -54,6 +56,8 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
                 if (slot_petal_id == PetalID::kPoisonCactus)
             buffs.is_poisonous = 1;
     }
+    if (has_powder) player.speed_ratio *= 1.10f;
+
     return buffs;
 }
 

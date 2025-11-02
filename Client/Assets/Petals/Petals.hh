@@ -54,4 +54,6 @@ namespace Petals {
     void LPeas(Renderer &ctx, float r);
     void Soil(Renderer &ctx, float r);
     void TriFaster(Renderer &ctx, float r);
-    void PoisonTricac(Renderer &ctx, float r);}
+    void PoisonTricac(Renderer &ctx, float r);
+    void Powder(Renderer &ctx, float r);
+}

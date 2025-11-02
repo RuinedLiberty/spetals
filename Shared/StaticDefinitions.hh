@@ -76,7 +76,8 @@ namespace PetalID {
         kLPeas,
         kSoil,
         kTriFaster,
-        kPoisonTricac,
+                kPoisonTricac,
+        kPowder,
         kNumPetals
     };
 };

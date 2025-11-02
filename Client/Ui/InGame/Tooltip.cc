@@ -139,10 +139,17 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::StaticText(BODY_FONT, "+"+format_pct(100 * (attrs.extra_damage_factor - 1)))
         }, 0, 5, { .h_justify = Style::Left }));
     }
-    if (attrs.reload_reduction > 0) {
+        if (attrs.reload_reduction > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::StaticText(BODY_FONT, "Reload:", { .fill = 0xffcae934 }),
             new Ui::StaticText(BODY_FONT, format_pct(attrs.reload_reduction * 100))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (id == PetalID::kPowder) {
+        // Non-stacking movement speed buff
+        stats.push_back(new Ui::HContainer({
+            new Ui::StaticText(BODY_FONT, "Movement Speed:", { .fill = 0xffcae934 }),
+            new Ui::StaticText(BODY_FONT, "+10%")
         }, 0, 5, { .h_justify = Style::Left }));
     }
     return new Ui::VContainer(stats, 0, 3, { .h_justify = Style::Left, .should_render = [](){ return Game::show_tooltip_stats; } });
